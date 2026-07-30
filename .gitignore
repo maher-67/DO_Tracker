@@ -70,6 +70,7 @@ warehouse_notes.db
 warehouse_notes.db-journal
 warehouse_notes.db-wal
 venv/
+.DS_Store
 
 # Scrapy stuff:
 .scrapy
