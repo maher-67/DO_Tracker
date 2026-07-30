@@ -65,8 +65,11 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
-# Local app database
+# Local app data and virtual environment
 warehouse_notes.db
+warehouse_notes.db-journal
+warehouse_notes.db-wal
+venv/
 
 # Scrapy stuff:
 .scrapy
