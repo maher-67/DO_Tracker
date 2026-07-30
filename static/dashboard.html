@@ -55,9 +55,9 @@
   header .meta {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     color: var(--muted);
   }
 
@@ -77,13 +77,14 @@
 
   #refresh-btn {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     background: var(--surface);
     border: 1px solid var(--hairline);
     color: var(--ink);
-    padding: 5px 10px;
+    padding: 10px 16px;
+    min-height: 44px;
     cursor: pointer;
   }
   #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -97,12 +98,13 @@
   #search {
     width: 100%;
     max-width: 360px;
-    padding: 8px 10px;
+    padding: 12px 14px;
+    min-height: 44px;
     margin-bottom: 16px;
     border: 1px solid var(--hairline);
     background: var(--surface);
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 15px;
     color: var(--ink);
   }
   #search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -116,12 +118,12 @@
 
   thead th {
     text-align: left;
-    font-size: 11px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
     font-weight: 600;
-    padding: 10px 14px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--hairline);
     white-space: nowrap;
   }
@@ -133,8 +135,8 @@
   tbody tr.order-row:hover { background: #FAFBFC; }
 
   tbody td {
-    padding: 12px 14px;
-    font-size: 13px;
+    padding: 18px 16px;
+    font-size: 16px;
     vertical-align: middle;
   }
 
@@ -156,29 +158,30 @@
   .rail {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
   }
   .rail .tick {
-    width: 22px;
-    height: 6px;
+    width: 28px;
+    height: 9px;
     background: var(--hairline);
     border-radius: 1px;
   }
   .rail .tick.filled { background: var(--tick-color, var(--accent)); }
   .rail-label {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
-    margin-left: 8px;
+    margin-left: 10px;
     color: var(--muted);
   }
 
   select.status-select {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 15px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    padding: 4px 6px;
+    padding: 10px 12px;
+    min-height: 44px;
     border: 1px solid var(--hairline);
     background: var(--surface);
     color: var(--ink);
@@ -211,31 +214,33 @@
     margin: 0 0 10px;
   }
 
-  .contents-list { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; }
-  .contents-list li { padding: 4px 0; border-bottom: 1px dashed var(--hairline); display: flex; justify-content: space-between; }
+  .contents-list { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 15px; }
+  .contents-list li { padding: 8px 0; border-bottom: 1px dashed var(--hairline); display: flex; justify-content: space-between; }
   .contents-list li:last-child { border-bottom: none; }
-  .contents-empty { color: var(--muted); font-size: 12.5px; font-family: var(--mono); }
+  .contents-empty { color: var(--muted); font-size: 15px; font-family: var(--mono); }
 
-  .notes-thread { list-style: none; margin: 0 0 12px; padding: 0; max-height: 180px; overflow-y: auto; }
-  .notes-thread li { padding: 8px 0; border-bottom: 1px dashed var(--hairline); font-size: 13px; }
-  .notes-thread .note-meta { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .notes-thread { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
+  .notes-thread li { padding: 10px 0; border-bottom: 1px dashed var(--hairline); font-size: 15px; }
+  .notes-thread .note-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  .note-form { display: flex; gap: 8px; }
+  .note-form { display: flex; gap: 10px; }
   .note-form input[type="text"] {
     flex: 1;
-    padding: 6px 8px;
+    padding: 10px 12px;
+    min-height: 44px;
     border: 1px solid var(--hairline);
-    font-size: 13px;
+    font-size: 15px;
     font-family: var(--sans);
   }
   .note-form button {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 13px;
     text-transform: uppercase;
     border: 1px solid var(--ink);
     background: var(--ink);
     color: var(--surface);
-    padding: 6px 12px;
+    padding: 10px 18px;
+    min-height: 44px;
     cursor: pointer;
   }
   .note-form button:hover { background: var(--accent); border-color: var(--accent); }
@@ -252,11 +257,14 @@
 <body>
 
 <header>
-  <h1>Delivery Floor</h1>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <img src="/static/hexmodal_logo.png" alt="Hexmodal" style="height:22px; width:auto;">
+    <h1>Delivery Floor</h1>
+  </div>
   <div class="meta">
     <span><span class="live-dot"></span> live</span>
     <span id="last-updated">--</span>
-    <a href="/logout" style="color:var(--muted); text-decoration:none; font-family:var(--mono); font-size:12px;">Log out</a>
+    <a href="/logout" style="color:var(--muted); text-decoration:none; font-family:var(--mono); font-size:13px; padding:6px 0;">Log out</a>
     <button id="refresh-btn">Refresh</button>
   </div>
 </header>
@@ -451,7 +459,7 @@ function appendDetailRow(order, row) {
           <h3>Notes</h3>
           <ul class="notes-thread"><li class="contents-empty" style="border:none;">Loading...</li></ul>
           <div class="note-form">
-            <input type="text" class="note-author" placeholder="Your name" style="max-width:110px;">
+            <input type="text" class="note-author" placeholder="Your name" style="max-width:130px;">
             <input type="text" class="note-text" placeholder="Add a note...">
             <button type="button">Add</button>
           </div>

@@ -57,18 +57,20 @@
   }
   input {
     width: 100%;
-    padding: 8px 10px;
+    padding: 12px 14px;
+    min-height: 44px;
     margin-bottom: 16px;
     border: 1px solid var(--hairline);
-    font-size: 13px;
+    font-size: 15px;
     font-family: var(--sans);
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   button {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
+    min-height: 44px;
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     background: var(--ink);
@@ -87,6 +89,7 @@
 </head>
 <body>
   <div class="card">
+    <img src="/static/hexmodal_logo.png" alt="Hexmodal" style="height:20px; width:auto; margin-bottom:16px; display:block;">
     <h1>Delivery Floor</h1>
     <p class="sub">enter the site password to continue</p>
     <form id="login-form">
