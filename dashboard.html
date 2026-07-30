@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Floor</title>
+<style>
+  :root {
+    --bg: #F3F5F7;
+    --surface: #FFFFFF;
+    --ink: #16202B;
+    --muted: #7C8A9A;
+    --hairline: #DCE2E8;
+    --accent: #2F6FA3;
+
+    --s-pending: #9AA5B1;
+    --s-picking: #2F6FA3;
+    --s-packed: #6E56CF;
+    --s-staged: #B8860B;
+    --s-loaded: #C4670E;
+    --s-out_for_delivery: #C0392B;
+    --s-delivered: #2E9E6D;
+
+    --mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+    --sans: -apple-system, "SF Pro Display", "Helvetica Neue", ui-sans-serif, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  header .meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--s-delivered);
+    display: inline-block;
+    animation: pulse 2.2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  #refresh-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  main {
+    padding: 24px 32px 60px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  #search {
+    width: 100%;
+    max-width: 360px;
+    padding: 8px 10px;
+    margin-bottom: 16px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+  }
+  #search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+  }
+
+  thead th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--hairline);
+    white-space: nowrap;
+  }
+
+  tbody tr.order-row {
+    cursor: pointer;
+    border-bottom: 1px solid var(--hairline);
+  }
+  tbody tr.order-row:hover { background: #FAFBFC; }
+
+  tbody td {
+    padding: 12px 14px;
+    font-size: 13px;
+    vertical-align: middle;
+  }
+
+  .order-name { font-family: var(--mono); font-weight: 600; }
+  .customer { color: var(--ink); }
+  .sched-date { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+  }
+
+  .rail {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .rail .tick {
+    width: 22px;
+    height: 6px;
+    background: var(--hairline);
+    border-radius: 1px;
+  }
+  .rail .tick.filled { background: var(--tick-color, var(--accent)); }
+  .rail-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-left: 8px;
+    color: var(--muted);
+  }
+
+  select.status-select {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 6px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .note-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  tr.detail-row td {
+    background: #FAFBFC;
+    padding: 18px 14px 24px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  .detail-col h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+
+  .contents-list { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 12.5px; }
+  .contents-list li { padding: 4px 0; border-bottom: 1px dashed var(--hairline); display: flex; justify-content: space-between; }
+  .contents-list li:last-child { border-bottom: none; }
+  .contents-empty { color: var(--muted); font-size: 12.5px; font-family: var(--mono); }
+
+  .notes-thread { list-style: none; margin: 0 0 12px; padding: 0; max-height: 180px; overflow-y: auto; }
+  .notes-thread li { padding: 8px 0; border-bottom: 1px dashed var(--hairline); font-size: 13px; }
+  .notes-thread .note-meta { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+
+  .note-form { display: flex; gap: 8px; }
+  .note-form input[type="text"] {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--hairline);
+    font-size: 13px;
+    font-family: var(--sans);
+  }
+  .note-form button {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--surface);
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .note-form button:hover { background: var(--accent); border-color: var(--accent); }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <img src="/static/hexmodal_logo.png" alt="Hexmodal" style="height:22px; width:auto;">
+    <h1>Delivery Floor</h1>
+  </div>
+  <div class="meta">
+    <span><span class="live-dot"></span> live</span>
+    <span id="last-updated">--</span>
+    <a href="/logout" style="color:var(--muted); text-decoration:none; font-family:var(--mono); font-size:12px;">Log out</a>
+    <button id="refresh-btn">Refresh</button>
+  </div>
+</header>
+
+<main>
+  <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+    <input id="search" type="text" placeholder="Filter by order # or customer..." style="margin-bottom:0;">
+    <select id="pm-filter" class="status-select" style="min-width:160px;">
+      <option value="">All project managers</option>
+    </select>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Order</th>
+        <th>Customer</th>
+        <th>PM</th>
+        <th>Scheduled</th>
+        <th>Progress</th>
+        <th>Set stage</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody id="order-rows">
+      <tr><td colspan="7" class="empty-state">Loading orders...</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<script>
+const STATUS_META = {
+  pending:            { label: "Pending",           short: "PEND", color: "var(--s-pending)" },
+  picking:            { label: "Picking",           short: "PICK", color: "var(--s-picking)" },
+  packed:             { label: "Packed",            short: "PACK", color: "var(--s-packed)" },
+  staged:             { label: "Staged",             short: "STG",  color: "var(--s-staged)" },
+  loaded:             { label: "Loaded",             short: "LOAD", color: "var(--s-loaded)" },
+  out_for_delivery:   { label: "Out for delivery",   short: "OFD",  color: "var(--s-out_for_delivery)" },
+  delivered:          { label: "Delivered",          short: "DLV",  color: "var(--s-delivered)" },
+};
+const STATUS_ORDER = Object.keys(STATUS_META);
+
+let orders = [];
+let expandedId = null;
+
+async function fetchOrders() {
+  const res = await fetch("/orders");
+  if (res.status === 401) { window.location.href = "/login"; return; }
+  orders = await res.json();
+  populatePmFilter();
+  renderTable();
+  document.getElementById("last-updated").textContent =
+    "updated " + new Date().toLocaleTimeString();
+}
+
+function renderRail(currentStatus) {
+  const currentIdx = STATUS_ORDER.indexOf(currentStatus);
+  const color = STATUS_META[currentStatus]?.color || "var(--accent)";
+  const ticks = STATUS_ORDER.map((key, idx) => {
+    const filled = idx <= currentIdx;
+    return `<span class="tick${filled ? " filled" : ""}" style="--tick-color:${color}"></span>`;
+  }).join("");
+  return `<div class="rail">${ticks}<span class="rail-label">${STATUS_META[currentStatus]?.label || currentStatus}</span></div>`;
+}
+
+function renderStatusSelect(order) {
+  const options = STATUS_ORDER.map(key =>
+    `<option value="${key}" ${key === order.local_status ? "selected" : ""}>${STATUS_META[key].label}</option>`
+  ).join("");
+  return `<select class="status-select" data-id="${order.id}" data-name="${order.name}">${options}</select>`;
+}
+
+function renderContents(contents) {
+  if (!contents || contents.length === 0) {
+    return `<p class="contents-empty">No line items found.</p>`;
+  }
+  const items = contents.map(c =>
+    `<li><span>${c.product}</span><span>${c.quantity} ${c.uom}</span></li>`
+  ).join("");
+  return `<ul class="contents-list">${items}</ul>`;
+}
+
+async function renderNotes(pickingId, container) {
+  const res = await fetch(`/orders/${pickingId}/notes`);
+  const notes = await res.json();
+
+  const thread = notes.length
+    ? notes.map(n => `
+        <li>
+          ${escapeHtml(n.note_text)}
+          <div class="note-meta">${n.author ? escapeHtml(n.author) + " -- " : ""}${new Date(n.created_at).toLocaleString()}</div>
+        </li>
+      `).join("")
+    : `<li class="contents-empty" style="border:none;">No notes yet.</li>`;
+
+  container.querySelector(".notes-thread").innerHTML = thread;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function populatePmFilter() {
+  const select = document.getElementById("pm-filter");
+  const current = select.value;
+  const pms = [...new Set(orders.map(o => o.project_manager).filter(Boolean))].sort();
+  select.innerHTML = `<option value="">All project managers</option>` +
+    pms.map(pm => `<option value="${pm}" ${pm === current ? "selected" : ""}>${pm}</option>`).join("");
+}
+
+function renderTable() {
+  const filterVal = document.getElementById("search").value.trim().toLowerCase();
+  const pmVal = document.getElementById("pm-filter").value;
+  const tbody = document.getElementById("order-rows");
+  tbody.innerHTML = "";
+
+  const filtered = orders.filter(o =>
+    (!filterVal ||
+      o.name.toLowerCase().includes(filterVal) ||
+      (o.partner_name || "").toLowerCase().includes(filterVal)) &&
+    (!pmVal || o.project_manager === pmVal)
+  );
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No matching delivery orders.</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(order => {
+    const row = document.createElement("tr");
+    row.className = "order-row";
+    row.dataset.id = order.id;
+    row.innerHTML = `
+      <td class="order-name">${order.name}</td>
+      <td class="customer">${order.partner_name || "--"}</td>
+      <td class="customer">${order.project_manager || "--"}</td>
+      <td class="sched-date">${order.scheduled_date ? order.scheduled_date.slice(0, 16) : "--"}</td>
+      <td>${renderRail(order.local_status)}</td>
+      <td>${renderStatusSelect(order)}</td>
+      <td><span class="note-pill">${order.note_count} note${order.note_count === 1 ? "" : "s"}</span></td>
+    `;
+    tbody.appendChild(row);
+
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("select")) return;
+      toggleDetail(order, row);
+    });
+
+    row.querySelector(".status-select").addEventListener("click", (e) => e.stopPropagation());
+    row.querySelector(".status-select").addEventListener("change", async (e) => {
+      const newStatus = e.target.value;
+      await fetch(`/orders/${order.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, picking_name: order.name }),
+      });
+      order.local_status = newStatus;
+      const rail = row.querySelector("td:nth-child(5)");
+      rail.innerHTML = renderRail(newStatus);
+    });
+
+    if (expandedId === order.id) {
+      appendDetailRow(order, row);
+    }
+  });
+}
+
+function toggleDetail(order, row) {
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains("detail-row")) {
+    existing.remove();
+    expandedId = null;
+    return;
+  }
+  document.querySelectorAll(".detail-row").forEach(el => el.remove());
+  expandedId = order.id;
+  appendDetailRow(order, row);
+}
+
+function appendDetailRow(order, row) {
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  detailRow.innerHTML = `
+    <td colspan="7">
+      <div class="detail-grid">
+        <div class="detail-col">
+          <h3>Contents</h3>
+          ${renderContents(order.contents)}
+        </div>
+        <div class="detail-col">
+          <h3>Notes</h3>
+          <ul class="notes-thread"><li class="contents-empty" style="border:none;">Loading...</li></ul>
+          <div class="note-form">
+            <input type="text" class="note-author" placeholder="Your name" style="max-width:110px;">
+            <input type="text" class="note-text" placeholder="Add a note...">
+            <button type="button">Add</button>
+          </div>
+        </div>
+      </div>
+    </td>
+  `;
+  row.after(detailRow);
+  renderNotes(order.id, detailRow);
+
+  const authorInput = detailRow.querySelector(".note-author");
+  authorInput.value = localStorage.getItem("delivery_floor_author") || "";
+
+  const input = detailRow.querySelector(".note-text");
+  const button = detailRow.querySelector("button");
+  const submit = async () => {
+    const text = input.value.trim();
+    const author = authorInput.value.trim();
+    if (!text) return;
+    localStorage.setItem("delivery_floor_author", author);
+    await fetch(`/orders/${order.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_text: text, picking_name: order.name, author }),
+    });
+    input.value = "";
+    renderNotes(order.id, detailRow);
+    order.note_count += 1;
+  };
+  button.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  detailRow.addEventListener("click", (e) => e.stopPropagation());
+}
+
+document.getElementById("search").addEventListener("input", renderTable);
+document.getElementById("pm-filter").addEventListener("change", renderTable);
+document.getElementById("refresh-btn").addEventListener("click", fetchOrders);
+
+fetchOrders();
+setInterval(fetchOrders, 30000);
+</script>
+
+</body>
+</html>
