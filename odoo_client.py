@@ -15,8 +15,8 @@ from dataclasses import dataclass
 # TODO: fill these in after checking the field in Odoo (debug mode -> hover
 # over the "Ops Status" label on a Delivery Order to see the technical name,
 # and check Settings > Technical > Fields for the selection's internal value).
-OPS_STATUS_FIELD = "x_ops_status"          # placeholder -- likely wrong, confirm it
-OPS_STATUS_VALUE = "shipment_in_progress"  # placeholder -- likely wrong, confirm it
+OPS_STATUS_FIELD = "hex_ops_state"          # placeholder -- likely wrong, confirm it
+OPS_STATUS_VALUE = "in_process"  # placeholder -- likely wrong, confirm it
 
 # Only pull orders whose SOURCE location is one of these (adjust if your
 # warehouse codes differ -- check the picking's "Source Location" field).
