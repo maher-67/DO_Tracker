@@ -12,6 +12,7 @@ GET  /logout                     -> clear session
 GET  /                           -> the dashboard (HTML, requires login)
 GET  /orders                     -> all active delivery orders, each with
                                      contents, note count, and local status
+GET  /inventory                  -> on-hand quantities for the configured SKUs
 GET  /orders/<picking_id>/notes  -> notes for one order
 POST /orders/<picking_id>/notes  -> add a note (local DB only, never touches Odoo)
 POST /orders/<picking_id>/status -> set the local status (local DB only, never touches Odoo)
@@ -104,6 +105,13 @@ def list_orders():
         result.append(order_dict)
 
     return jsonify(result)
+
+
+@app.route("/inventory", methods=["GET"])
+@login_required
+def list_inventory():
+    items = odoo.get_inventory()
+    return jsonify([asdict(i) for i in items])
 
 
 @app.route("/orders/<int:picking_id>/notes", methods=["GET"])

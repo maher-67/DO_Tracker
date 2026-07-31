@@ -15,17 +15,39 @@ from dataclasses import dataclass
 # TODO: fill these in after checking the field in Odoo (debug mode -> hover
 # over the "Ops Status" label on a Delivery Order to see the technical name,
 # and check Settings > Technical > Fields for the selection's internal value).
-OPS_STATUS_FIELD = "hex_ops_state"          # placeholder -- likely wrong, confirm it
-OPS_STATUS_VALUE = "in_process"  # placeholder -- likely wrong, confirm it
+OPS_STATUS_FIELD = "x_ops_status"          # placeholder -- likely wrong, confirm it
+OPS_STATUS_VALUE = "shipment_in_progress"  # placeholder -- likely wrong, confirm it
 
-# Only pull orders whose SOURCE location is WH/Stock (adjust if your
-# warehouse code differs -- check the picking's "Source Location" field).
-SOURCE_LOCATION_NAME = ["WH/Stock", "WH/Output"]
+# Only pull orders whose SOURCE location is one of these (adjust if your
+# warehouse codes differ -- check the picking's "Source Location" field).
+SOURCE_LOCATION_NAMES = ["WH/Stock", "WH/Output"]
 
 # TODO: same discovery process as Ops Status -- hover over "Project Manager"
 # in debug mode to get the technical field name. If it's a many2one (e.g. a
 # linked user or contact) rather than plain text, that's handled below too.
-PROJECT_MANAGER_FIELD = "x_studio_project_manager"  # placeholder -- likely wrong, confirm it
+PROJECT_MANAGER_FIELD = "x_project_manager"  # placeholder -- likely wrong, confirm it
+
+# The specific products to show on the Inventory tab. Use each product's
+# Internal Reference / SKU exactly as it appears in Odoo (Sales > Products,
+# the "Internal Reference" field). Add or remove SKUs as needed.
+INVENTORY_SKUS = [
+    "HEX-X-R",
+    "HEX-X-G",
+    "HEX-X-B-R",
+    "HEX-C-R",
+    "HEX-C-G",
+    "HEX-A-1",
+    "HEX-A-2",
+    "HEX-A-R-1",
+    "HEX-A-R-2",
+    "HEX-A-C-1",
+    "HEX-A-C-2",
+    "HEX-P",
+    "HEX-M",
+    "HEX-T-C",
+    "HEX-T-R",
+    "HEX-T-ULT",
+]
 
 
 def _display_value(raw):
@@ -44,6 +66,17 @@ class DeliveryOrder:
     state: str
     ops_status: str
     project_manager: str
+
+
+@dataclass
+class InventoryItem:
+    product_id: int
+    sku: str
+    name: str
+    on_hand: float
+    reserved: float
+    available: float
+    uom: str
 
 
 class OdooReadOnlyClient:
@@ -91,7 +124,7 @@ class OdooReadOnlyClient:
             ("picking_type_id.code", "=", "outgoing"),
             ("state", "=", "assigned"),  # "assigned" is Odoo's internal key for "Ready"
             (OPS_STATUS_FIELD, "=", OPS_STATUS_VALUE),
-            ("location_id.complete_name", "=", SOURCE_LOCATION_NAME),
+            ("location_id.complete_name", "in", SOURCE_LOCATION_NAMES),
         ]
         fields = [
             "id", "name", "partner_id", "scheduled_date", "state",
@@ -149,3 +182,63 @@ class OdooReadOnlyClient:
                 }
             )
         return lines_by_picking
+
+    def get_inventory(self):
+        """
+        Returns a list of InventoryItem for each SKU in INVENTORY_SKUS,
+        summing on-hand quantity across the warehouse locations defined in
+        SOURCE_LOCATION_NAMES. Products with no stock at all still appear,
+        with zeros, so nothing silently disappears from the list.
+        """
+        if not INVENTORY_SKUS:
+            return []
+
+        products = self._read_only_execute(
+            "product.product",
+            "search_read",
+            [("default_code", "in", INVENTORY_SKUS)],
+            ["id", "default_code", "name", "uom_id"],
+        )
+        if not products:
+            return []
+
+        product_ids = [p["id"] for p in products]
+        quants = self._read_only_execute(
+            "stock.quant",
+            "search_read",
+            [
+                ("product_id", "in", product_ids),
+                ("location_id.complete_name", "in", SOURCE_LOCATION_NAMES),
+            ],
+            ["product_id", "quantity", "reserved_quantity"],
+        )
+
+        totals = {}
+        for q in quants:
+            pid = q["product_id"][0] if q.get("product_id") else None
+            if pid is None:
+                continue
+            bucket = totals.setdefault(pid, {"quantity": 0.0, "reserved": 0.0})
+            bucket["quantity"] += q.get("quantity", 0.0)
+            bucket["reserved"] += q.get("reserved_quantity", 0.0)
+
+        items = []
+        for p in products:
+            t = totals.get(p["id"], {"quantity": 0.0, "reserved": 0.0})
+            on_hand = t["quantity"]
+            reserved = t["reserved"]
+            items.append(
+                InventoryItem(
+                    product_id=p["id"],
+                    sku=p.get("default_code") or "",
+                    name=p.get("name") or "",
+                    on_hand=on_hand,
+                    reserved=reserved,
+                    available=on_hand - reserved,
+                    uom=_display_value(p.get("uom_id")),
+                )
+            )
+        # Keep them in the same order as INVENTORY_SKUS for predictable display.
+        order = {sku: i for i, sku in enumerate(INVENTORY_SKUS)}
+        items.sort(key=lambda i: order.get(i.sku, len(order)))
+        return items

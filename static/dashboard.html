@@ -95,6 +95,33 @@
     margin: 0 auto;
   }
 
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .tab-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 10px 4px;
+    margin-right: 24px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--ink); }
+  .tab-btn.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+  #inventory-rows td { font-family: var(--mono); }
+  .sku-cell { font-weight: 600; }
+  .qty-low { color: var(--s-out_for_delivery); font-weight: 600; }
+
   #search {
     width: 100%;
     max-width: 360px;
@@ -270,28 +297,52 @@
 </header>
 
 <main>
-  <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-    <input id="search" type="text" placeholder="Filter by order # or customer..." style="margin-bottom:0;">
-    <select id="pm-filter" class="status-select" style="min-width:160px;">
-      <option value="">All project managers</option>
-    </select>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="orders">Orders</button>
+    <button class="tab-btn" data-tab="inventory">Inventory</button>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Order</th>
-        <th>Customer</th>
-        <th>PM</th>
-        <th>Scheduled</th>
-        <th>Progress</th>
-        <th>Set stage</th>
-        <th>Notes</th>
-      </tr>
-    </thead>
-    <tbody id="order-rows">
-      <tr><td colspan="7" class="empty-state">Loading orders...</td></tr>
-    </tbody>
-  </table>
+
+  <div id="tab-orders" class="tab-panel">
+    <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+      <input id="search" type="text" placeholder="Filter by order # or customer..." style="margin-bottom:0;">
+      <select id="pm-filter" class="status-select" style="min-width:160px;">
+        <option value="">All project managers</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Customer</th>
+          <th>PM</th>
+          <th>Scheduled</th>
+          <th>Progress</th>
+          <th>Set stage</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="order-rows">
+        <tr><td colspan="7" class="empty-state">Loading orders...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="tab-inventory" class="tab-panel" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Product</th>
+          <th>On hand</th>
+          <th>Reserved</th>
+          <th>Available</th>
+        </tr>
+      </thead>
+      <tbody id="inventory-rows">
+        <tr><td colspan="5" class="empty-state">Loading inventory...</td></tr>
+      </tbody>
+    </table>
+  </div>
 </main>
 
 <script>
@@ -496,10 +547,66 @@ function appendDetailRow(order, row) {
 
 document.getElementById("search").addEventListener("input", renderTable);
 document.getElementById("pm-filter").addEventListener("change", renderTable);
-document.getElementById("refresh-btn").addEventListener("click", fetchOrders);
+
+// --- Tabs -----------------------------------------------------------
+
+let activeTab = "orders";
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTab = btn.dataset.tab;
+    document.getElementById("tab-orders").style.display = activeTab === "orders" ? "" : "none";
+    document.getElementById("tab-inventory").style.display = activeTab === "inventory" ? "" : "none";
+    if (activeTab === "inventory") fetchInventory();
+  });
+});
+
+document.getElementById("refresh-btn").addEventListener("click", () => {
+  if (activeTab === "orders") fetchOrders();
+  else fetchInventory();
+});
+
+// --- Inventory --------------------------------------------------------
+
+async function fetchInventory() {
+  const res = await fetch("/inventory");
+  if (res.status === 401) { window.location.href = "/login"; return; }
+  const items = await res.json();
+  renderInventory(items);
+  document.getElementById("last-updated").textContent =
+    "updated " + new Date().toLocaleTimeString();
+}
+
+function renderInventory(items) {
+  const tbody = document.getElementById("inventory-rows");
+  tbody.innerHTML = "";
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No inventory items configured.</td></tr>`;
+    return;
+  }
+
+  items.forEach(item => {
+    const row = document.createElement("tr");
+    const lowStock = item.available <= 0;
+    row.innerHTML = `
+      <td class="sku-cell">${item.sku}</td>
+      <td>${item.name}</td>
+      <td>${item.on_hand} ${item.uom || ""}</td>
+      <td>${item.reserved} ${item.uom || ""}</td>
+      <td class="${lowStock ? "qty-low" : ""}">${item.available} ${item.uom || ""}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
 
 fetchOrders();
-setInterval(fetchOrders, 30000);
+setInterval(() => {
+  if (activeTab === "orders") fetchOrders();
+  else fetchInventory();
+}, 30000);
 </script>
 
 </body>
