@@ -25,7 +25,7 @@ SOURCE_LOCATION_NAMES = ["WH/Stock", "WH/Output"]
 # TODO: same discovery process as Ops Status -- hover over "Project Manager"
 # in debug mode to get the technical field name. If it's a many2one (e.g. a
 # linked user or contact) rather than plain text, that's handled below too.
-PROJECT_MANAGER_FIELD = "x_project_manager"  # placeholder -- likely wrong, confirm it
+PROJECT_MANAGER_FIELD = "x_studio_project_manager"  # placeholder -- likely wrong, confirm it
 
 # The specific products to show on the Inventory tab. Use each product's
 # Internal Reference / SKU exactly as it appears in Odoo (Sales > Products,
