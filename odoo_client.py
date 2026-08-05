@@ -12,20 +12,16 @@ import os
 import xmlrpc.client
 from dataclasses import dataclass
 
-# TODO: fill these in after checking the field in Odoo (debug mode -> hover
-# over the "Ops Status" label on a Delivery Order to see the technical name,
-# and check Settings > Technical > Fields for the selection's internal value).
-OPS_STATUS_FIELD = "hex_ops_state"          # placeholder -- likely wrong, confirm it
-OPS_STATUS_VALUE = "in_process"  # placeholder -- likely wrong, confirm it
+# Confirmed against the live Odoo instance.
+OPS_STATUS_FIELD = "hex_ops_state"
+OPS_STATUS_VALUE = "in_process"
 
 # Only pull orders whose SOURCE location is one of these (adjust if your
 # warehouse codes differ -- check the picking's "Source Location" field).
 SOURCE_LOCATION_NAMES = ["WH/Stock", "WH/Output"]
 
-# TODO: same discovery process as Ops Status -- hover over "Project Manager"
-# in debug mode to get the technical field name. If it's a many2one (e.g. a
-# linked user or contact) rather than plain text, that's handled below too.
-PROJECT_MANAGER_FIELD = "x_studio_project_manager"  # placeholder -- likely wrong, confirm it
+# Confirmed against the live Odoo instance.
+PROJECT_MANAGER_FIELD = "x_studio_project_manager"
 
 # The specific products to show on the Inventory tab. Use each product's
 # Internal Reference / SKU exactly as it appears in Odoo (Sales > Products,
@@ -104,6 +100,7 @@ class OdooReadOnlyClient:
         self._common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
         self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
         self._uid = None
+        self._reserved_field_cache = None
 
     def _authenticate(self):
         if self._uid is None:
@@ -198,6 +195,26 @@ class OdooReadOnlyClient:
             )
         return lines_by_picking
 
+    def _resolve_reserved_field(self):
+        """
+        Different Odoo versions have used different field names for "how
+        much of this move's demand is currently backed by reserved stock" on
+        stock.move -- check which one this instance actually has, in order
+        of preference, and cache the answer.
+        """
+        if self._reserved_field_cache is not None:
+            return self._reserved_field_cache or None
+
+        candidates = ["reserved_availability", "quantity"]
+        fields_info = self._read_only_execute("stock.move", "fields_get", [], {"attributes": []})
+        for candidate in candidates:
+            if candidate in fields_info:
+                self._reserved_field_cache = candidate
+                return candidate
+
+        self._reserved_field_cache = ""  # remember "none found" so we don't retry every call
+        return None
+
     def get_inventory(self):
         """
         Returns a list of InventoryItem for each SKU in INVENTORY_SKUS.
@@ -256,10 +273,13 @@ class OdooReadOnlyClient:
         # "Reserved" here means specifically what's committed to outgoing
         # delivery orders that haven't shipped yet -- not Odoo's raw
         # quant-level reserved_quantity, which also counts reservations from
-        # internal transfers, manufacturing, etc. reserved_availability on
-        # stock.move is how much of that move's demand is actually backed by
-        # reserved stock right now (vs. product_uom_qty, which is the total
-        # demand regardless of whether it's reserved yet).
+        # internal transfers, manufacturing, etc.
+        #
+        # The exact field name for "how much of this move's demand is
+        # currently backed by reserved stock" has changed across Odoo
+        # versions (reserved_availability in older versions, folded into
+        # quantity in more recent ones) -- so we detect which one actually
+        # exists on this instance rather than hardcoding one that might not.
         #
         # Scoped to the specific "WH/OUT" operation type (this warehouse's
         # delivery orders) rather than the generic "outgoing" code, which
@@ -276,7 +296,9 @@ class OdooReadOnlyClient:
         )
         delivery_picking_type_ids = [pt["id"] for pt in delivery_picking_types]
 
-        if not delivery_picking_type_ids:
+        reserved_field = self._resolve_reserved_field()
+
+        if not delivery_picking_type_ids or reserved_field is None:
             reserved_totals = {}
         else:
             moves = self._read_only_execute(
@@ -287,14 +309,14 @@ class OdooReadOnlyClient:
                     ("picking_type_id", "in", delivery_picking_type_ids),
                     ("state", "not in", ["done", "cancel"]),
                 ],
-                ["product_id", "reserved_availability"],
+                ["product_id", reserved_field],
             )
             reserved_totals = {}
             for m in moves:
                 pid = m["product_id"][0] if m.get("product_id") else None
                 if pid is None:
                     continue
-                reserved_totals[pid] = reserved_totals.get(pid, 0.0) + m.get("reserved_availability", 0.0)
+                reserved_totals[pid] = reserved_totals.get(pid, 0.0) + m.get(reserved_field, 0.0)
 
         items = []
         for p in products:
