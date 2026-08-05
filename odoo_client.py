@@ -209,12 +209,27 @@ class OdooReadOnlyClient:
             return []
 
         product_ids = [p["id"] for p in products]
+
+        # Resolve SOURCE_LOCATION_NAMES to actual location ids first, then use
+        # child_of so stock sitting in sub-locations (bins, shelves, staging
+        # areas nested under e.g. "WH/Stock") is included too -- an exact
+        # name match on complete_name would silently miss those and undercount.
+        top_locations = self._read_only_execute(
+            "stock.location",
+            "search_read",
+            [("complete_name", "in", SOURCE_LOCATION_NAMES)],
+            ["id"],
+        )
+        location_ids = [loc["id"] for loc in top_locations]
+        if not location_ids:
+            return []
+
         quants = self._read_only_execute(
             "stock.quant",
             "search_read",
             [
                 ("product_id", "in", product_ids),
-                ("location_id.complete_name", "in", SOURCE_LOCATION_NAMES),
+                ("location_id", "child_of", location_ids),
             ],
             ["product_id", "quantity", "reserved_quantity"],
         )
