@@ -31,22 +31,28 @@ PROJECT_MANAGER_FIELD = "x_studio_project_manager"  # placeholder -- likely wron
 # Internal Reference / SKU exactly as it appears in Odoo (Sales > Products,
 # the "Internal Reference" field). Add or remove SKUs as needed.
 INVENTORY_SKUS = [
+    "HEX-G",
     "HEX-X-R",
     "HEX-X-G",
     "HEX-X-B-R",
     "HEX-C-R",
     "HEX-C-G",
+    "HEX-C-B-R",
+    "HEX-W",
     "HEX-A-1",
     "HEX-A-2",
     "HEX-A-R-1",
     "HEX-A-R-2",
     "HEX-A-C-1",
     "HEX-A-C-2",
+    "HEX-N",
     "HEX-P",
     "HEX-M",
     "HEX-T-C",
     "HEX-T-R",
     "HEX-T-ULT",
+    "HEX-L-S",
+    "HEX-L-Z",
 ]
 
 
