@@ -55,6 +55,15 @@ INVENTORY_SKUS = [
     "HEX-L-Z",
 ]
 
+# Inventory counts sum stock across this location AND everything nested under
+# it (Stock, Output, Input, Quality Control, staging areas, bins, etc.) -- use
+# the top-level warehouse location (its complete_name is normally just the
+# warehouse's short code, e.g. "WH") rather than trying to enumerate specific
+# sub-locations by name, which is easy to undercount. If you have more than
+# one warehouse and want inventory scoped to just one of them, list only
+# that warehouse's code here.
+INVENTORY_LOCATION_NAMES = ["WH"]
+
 
 def _display_value(raw):
     """Odoo returns many2one fields as [id, name] and plain fields as-is."""
@@ -192,9 +201,9 @@ class OdooReadOnlyClient:
     def get_inventory(self):
         """
         Returns a list of InventoryItem for each SKU in INVENTORY_SKUS,
-        summing on-hand quantity across the warehouse locations defined in
-        SOURCE_LOCATION_NAMES. Products with no stock at all still appear,
-        with zeros, so nothing silently disappears from the list.
+        summing on-hand quantity across INVENTORY_LOCATION_NAMES and every
+        location nested underneath. Products with no stock at all still
+        appear, with zeros, so nothing silently disappears from the list.
         """
         if not INVENTORY_SKUS:
             return []
@@ -210,14 +219,14 @@ class OdooReadOnlyClient:
 
         product_ids = [p["id"] for p in products]
 
-        # Resolve SOURCE_LOCATION_NAMES to actual location ids first, then use
-        # child_of so stock sitting in sub-locations (bins, shelves, staging
-        # areas nested under e.g. "WH/Stock") is included too -- an exact
-        # name match on complete_name would silently miss those and undercount.
+        # Resolve INVENTORY_LOCATION_NAMES to actual location ids first, then
+        # use child_of so stock sitting anywhere underneath (Stock, Output,
+        # Input, bins, staging areas, etc.) is included -- an exact name
+        # match on complete_name would silently miss those and undercount.
         top_locations = self._read_only_execute(
             "stock.location",
             "search_read",
-            [("complete_name", "in", SOURCE_LOCATION_NAMES)],
+            [("complete_name", "in", INVENTORY_LOCATION_NAMES)],
             ["id"],
         )
         location_ids = [loc["id"] for loc in top_locations]
