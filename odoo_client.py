@@ -200,9 +200,12 @@ class OdooReadOnlyClient:
 
     def get_inventory(self):
         """
-        Returns a list of InventoryItem for each SKU in INVENTORY_SKUS,
-        summing on-hand quantity across INVENTORY_LOCATION_NAMES and every
-        location nested underneath. Products with no stock at all still
+        Returns a list of InventoryItem for each SKU in INVENTORY_SKUS.
+        on_hand sums physical quantity across INVENTORY_LOCATION_NAMES and
+        everything nested underneath. reserved sums only what's committed to
+        outgoing delivery orders that haven't shipped yet -- not Odoo's raw
+        quant-level reserved figure, which also includes internal transfers,
+        manufacturing consumption, etc. Products with no stock at all still
         appear, with zeros, so nothing silently disappears from the list.
         """
         if not INVENTORY_SKUS:
@@ -240,23 +243,63 @@ class OdooReadOnlyClient:
                 ("product_id", "in", product_ids),
                 ("location_id", "child_of", location_ids),
             ],
-            ["product_id", "quantity", "reserved_quantity"],
+            ["product_id", "quantity"],
         )
 
-        totals = {}
+        on_hand_totals = {}
         for q in quants:
             pid = q["product_id"][0] if q.get("product_id") else None
             if pid is None:
                 continue
-            bucket = totals.setdefault(pid, {"quantity": 0.0, "reserved": 0.0})
-            bucket["quantity"] += q.get("quantity", 0.0)
-            bucket["reserved"] += q.get("reserved_quantity", 0.0)
+            on_hand_totals[pid] = on_hand_totals.get(pid, 0.0) + q.get("quantity", 0.0)
+
+        # "Reserved" here means specifically what's committed to outgoing
+        # delivery orders that haven't shipped yet -- not Odoo's raw
+        # quant-level reserved_quantity, which also counts reservations from
+        # internal transfers, manufacturing, etc. reserved_availability on
+        # stock.move is how much of that move's demand is actually backed by
+        # reserved stock right now (vs. product_uom_qty, which is the total
+        # demand regardless of whether it's reserved yet).
+        #
+        # Scoped to the specific "WH/OUT" operation type (this warehouse's
+        # delivery orders) rather than the generic "outgoing" code, which
+        # would also match other warehouses' delivery operation types if
+        # this Odoo instance ever has more than one.
+        delivery_picking_types = self._read_only_execute(
+            "stock.picking.type",
+            "search_read",
+            [
+                ("warehouse_id.code", "in", INVENTORY_LOCATION_NAMES),
+                ("code", "=", "outgoing"),
+            ],
+            ["id"],
+        )
+        delivery_picking_type_ids = [pt["id"] for pt in delivery_picking_types]
+
+        if not delivery_picking_type_ids:
+            reserved_totals = {}
+        else:
+            moves = self._read_only_execute(
+                "stock.move",
+                "search_read",
+                [
+                    ("product_id", "in", product_ids),
+                    ("picking_type_id", "in", delivery_picking_type_ids),
+                    ("state", "not in", ["done", "cancel"]),
+                ],
+                ["product_id", "reserved_availability"],
+            )
+            reserved_totals = {}
+            for m in moves:
+                pid = m["product_id"][0] if m.get("product_id") else None
+                if pid is None:
+                    continue
+                reserved_totals[pid] = reserved_totals.get(pid, 0.0) + m.get("reserved_availability", 0.0)
 
         items = []
         for p in products:
-            t = totals.get(p["id"], {"quantity": 0.0, "reserved": 0.0})
-            on_hand = t["quantity"]
-            reserved = t["reserved"]
+            on_hand = on_hand_totals.get(p["id"], 0.0)
+            reserved = reserved_totals.get(p["id"], 0.0)
             items.append(
                 InventoryItem(
                     product_id=p["id"],
