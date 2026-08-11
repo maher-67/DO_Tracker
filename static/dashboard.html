@@ -122,6 +122,35 @@
   .sku-cell { font-weight: 600; }
   .qty-low { color: var(--s-out_for_delivery); font-weight: 600; }
 
+  .qty-check-input {
+    width: 90px;
+    padding: 8px 10px;
+    min-height: 40px;
+    border: 1px solid var(--hairline);
+    font-family: var(--mono);
+    font-size: 15px;
+  }
+  .qty-check-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .leadtime-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 6px 10px;
+    border: 1px solid var(--hairline);
+  }
+  .leadtime-note {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: none;
+    margin-top: 3px;
+  }
+
   #search {
     width: 100%;
     max-width: 360px;
@@ -300,6 +329,7 @@
   <div class="tabs">
     <button class="tab-btn active" data-tab="orders">Orders</button>
     <button class="tab-btn" data-tab="inventory">Inventory</button>
+    <button class="tab-btn" data-tab="leadtimes">Lead Times</button>
   </div>
 
   <div id="tab-orders" class="tab-panel">
@@ -340,6 +370,26 @@
       </thead>
       <tbody id="inventory-rows">
         <tr><td colspan="5" class="empty-state">Loading inventory...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="tab-leadtimes" class="tab-panel" style="display:none;">
+    <p style="font-family:var(--mono); font-size:13px; color:var(--muted); margin-bottom:16px;">
+      Type a quantity to check the estimated lead time against current on-hand stock.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Product</th>
+          <th>On hand</th>
+          <th>Quantity to check</th>
+          <th>Lead time</th>
+        </tr>
+      </thead>
+      <tbody id="leadtimes-rows">
+        <tr><td colspan="5" class="empty-state">Loading products...</td></tr>
       </tbody>
     </table>
   </div>
@@ -551,6 +601,8 @@ document.getElementById("pm-filter").addEventListener("change", renderTable);
 // --- Tabs -----------------------------------------------------------
 
 let activeTab = "orders";
+let cachedInventory = [];
+const leadTimeQuantities = {}; // sku -> last-typed quantity, kept across refreshes
 
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -559,13 +611,16 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     activeTab = btn.dataset.tab;
     document.getElementById("tab-orders").style.display = activeTab === "orders" ? "" : "none";
     document.getElementById("tab-inventory").style.display = activeTab === "inventory" ? "" : "none";
+    document.getElementById("tab-leadtimes").style.display = activeTab === "leadtimes" ? "" : "none";
     if (activeTab === "inventory") fetchInventory();
+    if (activeTab === "leadtimes") fetchInventory().then(renderLeadTimes);
   });
 });
 
 document.getElementById("refresh-btn").addEventListener("click", () => {
   if (activeTab === "orders") fetchOrders();
-  else fetchInventory();
+  else if (activeTab === "inventory") fetchInventory();
+  else fetchInventory().then(renderLeadTimes);
 });
 
 // --- Inventory --------------------------------------------------------
@@ -573,8 +628,8 @@ document.getElementById("refresh-btn").addEventListener("click", () => {
 async function fetchInventory() {
   const res = await fetch("/inventory");
   if (res.status === 401) { window.location.href = "/login"; return; }
-  const items = await res.json();
-  renderInventory(items);
+  cachedInventory = await res.json();
+  renderInventory(cachedInventory);
   document.getElementById("last-updated").textContent =
     "updated " + new Date().toLocaleTimeString();
 }
@@ -602,10 +657,82 @@ function renderInventory(items) {
   });
 }
 
+// --- Lead Times ---------------------------------------------------------
+
+const LEADTIME_COLORS = { 1: "var(--s-delivered)", 2: "var(--s-staged)", 3: "var(--s-loaded)", 4: "var(--s-out_for_delivery)" };
+
+// Rules, checked in order:
+//   qty < 50            -> 1 week   IF on_hand > 50   else bumped to the 2-week tier
+//   50 <= qty <= 100     -> 2 weeks  IF on_hand > 100  else bumped to the 3-week tier
+//   100 < qty <= 200     -> 3 weeks  (on-hand doesn't change this tier)
+//   qty > 200            -> 4 weeks  (on-hand doesn't change this tier)
+function calcLeadTime(qty, onHand) {
+  if (qty < 50) {
+    if (onHand > 50) return { weeks: 1, bumped: false };
+    return { weeks: 2, bumped: true };
+  }
+  if (qty <= 100) {
+    if (onHand > 100) return { weeks: 2, bumped: false };
+    return { weeks: 3, bumped: true };
+  }
+  if (qty <= 200) {
+    return { weeks: 3, bumped: false };
+  }
+  return { weeks: 4, bumped: false };
+}
+
+function renderLeadTimes() {
+  const tbody = document.getElementById("leadtimes-rows");
+  tbody.innerHTML = "";
+
+  if (!cachedInventory || cachedInventory.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No inventory items configured.</td></tr>`;
+    return;
+  }
+
+  cachedInventory.forEach(item => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td class="sku-cell">${item.sku}</td>
+      <td>${item.name}</td>
+      <td>${item.on_hand} ${item.uom || ""}</td>
+      <td><input type="number" min="0" class="qty-check-input" data-sku="${item.sku}" placeholder="Qty"></td>
+      <td class="leadtime-result">--</td>
+    `;
+    tbody.appendChild(row);
+
+    const input = row.querySelector(".qty-check-input");
+    const resultCell = row.querySelector(".leadtime-result");
+
+    const update = () => {
+      const qty = parseFloat(input.value);
+      if (isNaN(qty) || input.value.trim() === "") {
+        resultCell.innerHTML = "--";
+        delete leadTimeQuantities[item.sku];
+        return;
+      }
+      leadTimeQuantities[item.sku] = qty;
+      const { weeks, bumped } = calcLeadTime(qty, item.on_hand);
+      const color = LEADTIME_COLORS[weeks];
+      resultCell.innerHTML = `
+        <span class="leadtime-badge" style="border-color:${color}; color:${color};">${weeks} week${weeks === 1 ? "" : "s"}</span>
+        ${bumped ? `<span class="leadtime-note">on-hand too low for faster tier</span>` : ""}
+      `;
+    };
+
+    if (leadTimeQuantities[item.sku] !== undefined) {
+      input.value = leadTimeQuantities[item.sku];
+      update();
+    }
+    input.addEventListener("input", update);
+  });
+}
+
 fetchOrders();
 setInterval(() => {
   if (activeTab === "orders") fetchOrders();
-  else fetchInventory();
+  else if (activeTab === "inventory") fetchInventory();
+  else fetchInventory().then(renderLeadTimes);
 }, 30000);
 </script>
 
