@@ -2,739 +2,2496 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<title>Demand Outlook</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Delivery Floor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
-    --bg: #F3F5F7;
-    --surface: #FFFFFF;
-    --ink: #16202B;
-    --muted: #7C8A9A;
-    --hairline: #DCE2E8;
-    --accent: #2F6FA3;
-
-    --s-pending: #9AA5B1;
-    --s-picking: #2F6FA3;
-    --s-packed: #6E56CF;
-    --s-staged: #B8860B;
-    --s-loaded: #C4670E;
-    --s-out_for_delivery: #C0392B;
-    --s-delivered: #2E9E6D;
-
-    --mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
-    --sans: -apple-system, "SF Pro Display", "Helvetica Neue", ui-sans-serif, sans-serif;
+    --bg: #f7f7f8;
+    --surface: #ffffff;
+    --border: #e2e2e6;
+    --text: #1a1a1e;
+    --text-secondary: #4b4b53;
+    --text-muted: #6b6b73;
+    --danger-bg: #fdecec; --danger-text: #c0342a;
+    --warning-bg: #fdf3e3; --warning-text: #a3690a;
+    --success-bg: #e9f7ef; --success-text: #1f8a4c;
+    --accent: #1d6fd1;
+    --forecast: #eb6834;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "SF Mono", "Menlo", "Consolas", monospace;
   }
-
   * { box-sizing: border-box; }
-
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--sans);
-    -webkit-font-smoothing: antialiased;
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font-family: var(--font); font-size: 16px;
   }
-
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 28px 32px 20px;
-    border-bottom: 1px solid var(--hairline);
-    background: var(--surface);
+  .wrap { max-width: 1440px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 28px; font-weight: 600; margin: 0; }
+  .meta { font-size: 15px; color: var(--text-muted); margin-bottom: 20px; }
+  .status-line { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-secondary); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success-text); display: inline-block; }
+  button {
+    font-family: var(--font); font-size: 15px; padding: 7px 14px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--text);
   }
-
-  header h1 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  header .meta {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .live-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--s-delivered);
-    display: inline-block;
-    animation: pulse 2.2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.35; }
-  }
-
-  #refresh-btn {
-    font-family: var(--mono);
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    color: var(--ink);
-    padding: 10px 16px;
-    min-height: 44px;
-    cursor: pointer;
-  }
-  #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-  main {
-    padding: 24px 32px 60px;
-    max-width: 1280px;
-    margin: 0 auto;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--hairline);
-  }
+  button:hover { background: #f0f0f2; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
   .tab-btn {
-    font-family: var(--mono);
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: none;
-    border: none;
-    color: var(--muted);
-    padding: 10px 4px;
-    margin-right: 24px;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
+    border: none; background: none; padding: 12px 4px; margin-right: 28px; font-size: 16px;
+    color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent;
+    border-radius: 0;
   }
-  .tab-btn:hover { color: var(--ink); }
-  .tab-btn.active { color: var(--ink); border-bottom-color: var(--accent); }
-
-  #inventory-rows td { font-family: var(--mono); }
-  .sku-cell { font-weight: 600; }
-  .qty-low { color: var(--s-out_for_delivery); font-weight: 600; }
-
-  .qty-check-input {
-    width: 90px;
-    padding: 8px 10px;
-    min-height: 40px;
-    border: 1px solid var(--hairline);
-    font-family: var(--mono);
-    font-size: 15px;
+  .tab-btn:hover { background: none; color: var(--text); }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+  .window-btn { font-size: 15px; padding: 6px 12px; }
+  .window-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .cycle-stat { flex: 1; }
+  .cycle-stat p:first-child { font-size: 15px; color: var(--text-secondary); margin: 0 0 4px; }
+  .cycle-stat p.big { font-size: 28px; font-weight: 600; font-family: var(--font-mono); margin: 0; }
+  .cycle-stat p.sub { font-size: 15px; color: var(--text-muted); margin: 2px 0 0; }
+  .age-bucket {
+    flex: 1; min-width: 130px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
   }
-  .qty-check-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-  .leadtime-badge {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 6px 10px;
-    border: 1px solid var(--hairline);
+  .age-bucket p:first-child { font-size: 15px; color: var(--text-secondary); margin: 0 0 4px; }
+  .age-bucket p.count { font-size: 28px; font-weight: 600; font-family: var(--font-mono); margin: 0; }
+  .age-bucket p.pct { font-size: 15px; color: var(--text-muted); margin: 2px 0 0; }
+  .age-bucket.warn { border-color: var(--warning-text); }
+  .age-bucket.warn p.count { color: var(--warning-text); }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+    padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
   }
-  .leadtime-note {
-    display: block;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--muted);
-    text-transform: none;
-    margin-top: 3px;
+  .control { display: flex; flex-direction: column; gap: 4px; }
+  .control label { font-size: 15px; color: var(--text-secondary); }
+  input[type=number] { width: 90px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font); }
+  input[type=range] { width: 120px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px,1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .kpi p:first-child { font-size: 15px; color: var(--text-secondary); margin: 0 0 6px; }
+  .kpi p:last-child { font-size: 32px; font-weight: 600; margin: 0; font-family: var(--font-mono); }
+  .device { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 8px; overflow: hidden; }
+  .device-row { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 14px 18px; cursor: pointer; }
+  .device-row:hover { background: #fafafb; }
+  .name { flex: 1; min-width: 160px; }
+  .name p:first-child { font-weight: 500; margin: 0; font-size: 16px; }
+  .name p:last-child { font-size: 15px; color: var(--text-muted); margin: 0; font-family: var(--font-mono); }
+  .col { flex-shrink: 0; text-align: right; }
+  .col.spark { width: 100px; text-align: center; }
+  .col p:first-child { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  .col p:last-child { font-size: 16px; margin: 0; font-family: var(--font-mono); }
+  .col.order p:last-child { font-size: 18px; font-weight: 600; }
+  .pill { font-size: 15px; padding: 4px 10px; border-radius: var(--radius); white-space: nowrap; }
+  .pill.reorder { background: var(--danger-bg); color: var(--danger-text); }
+  .pill.monitor { background: var(--warning-bg); color: var(--warning-text); }
+  .pill.ok { background: var(--success-bg); color: var(--success-text); }
+  .chev { color: var(--text-muted); transition: transform .15s; font-size: 15px; }
+  .detail { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .detail-meta { display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 0; font-size: 15px; color: var(--text-secondary); }
+  .chart-box { position: relative; height: 220px; }
+  .manual-input { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+  .error { background: var(--danger-bg); color: var(--danger-text); padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; }
+  .loading { color: var(--text-muted); padding: 40px 0; text-align: center; }
+  #instantTip {
+    position: fixed; z-index: 9999; display: none; max-width: 440px; padding: 10px 12px;
+    border-radius: 6px; background: #1f2430; color: #fff; font-size: 15px; line-height: 1.45;
+    pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.25); white-space: pre-line;
   }
-
-  #search {
-    width: 100%;
-    max-width: 360px;
-    padding: 12px 14px;
-    min-height: 44px;
-    margin-bottom: 16px;
-    border: 1px solid var(--hairline);
-    background: var(--surface);
-    font-family: var(--mono);
-    font-size: 15px;
-    color: var(--ink);
+  /* ---- Plain-language explanations ---- */
+  body { line-height: 1.45; }
+  .lead { font-size: 20px; line-height: 1.45; color: var(--text); margin: 0 0 20px; max-width: 900px; }
+  .section-title { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
+  .section-lead { font-size: 17px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 14px; max-width: 900px; }
+  .plain { font-size: 16px; line-height: 1.5; margin: 0 0 8px; }
+  .help { font-size: 14px; color: var(--text-muted); }
+  .control .help { margin-top: 2px; }
+  details.how { margin: 0 0 18px; border: 1px solid var(--border); border-radius: var(--radius); background: #fbfbfd; }
+  details.how > summary { cursor: pointer; padding: 12px 16px; font-size: 16px; font-weight: 600; color: var(--accent); list-style: none; display: flex; align-items: center; gap: 8px; }
+  details.how > summary::-webkit-details-marker { display: none; }
+  details.how > summary::before { content: "\25B8"; display: inline-block; transition: transform .15s; }
+  details.how[open] > summary::before { transform: rotate(90deg); }
+  details.how .how-body { padding: 2px 16px 16px; }
+  .formula { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 14px 16px; margin: 8px 0 12px; background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: var(--radius); font-size: 18px; line-height: 1.3; }
+  .f-result { font-weight: 700; color: #fff; background: var(--accent); padding: 5px 14px; border-radius: 999px; }
+  .f-term { background: #eaf1fc; border: 1px solid #c9daf5; padding: 5px 14px; border-radius: 999px; }
+  .f-op { font-weight: 700; font-size: 24px; color: var(--text-secondary); }
+  .f-note { font-size: 15px; color: var(--text-secondary); font-style: italic; }
+  .terms { margin: 0 0 14px; padding: 0 0 0 22px; }
+  .terms li { font-size: 16px; line-height: 1.5; padding: 3px 0; }
+  ol.steps { list-style: decimal; }
+  .example { font-size: 16px; line-height: 1.55; background: #fff8e6; border: 1px solid #f0dca8; border-radius: var(--radius); padding: 12px 16px; }
+  .example .ex-line { margin-top: 6px; }
+  .check-row { margin-top: 12px; }
+  .check { font-size: 16px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; }
+  .check-row .help { display: block; margin: 2px 0 0 26px; }
+  .status-item { display: block; color: var(--text); }
+  .status-item::before { content: "\2022  "; color: var(--text-muted); }
+  #revenueFileStatus, #shipFileStatus { font-size: 16px; line-height: 1.5; margin: 12px 0 0; }
+  #outlierNotice, #reconciliationNotice, #orderFulfillmentCoverage { font-size: 15px; line-height: 1.5; }
+  @media print {
+    body { padding: 0; background: #fff; }
+    .tabs, .controls, button, input[type=file], .status-line, #userBox { display: none !important; }
+    .device, .kpi, details.how { break-inside: avoid; }
   }
-  #search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-  }
-
-  thead th {
-    text-align: left;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    font-weight: 600;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--hairline);
-    white-space: nowrap;
-  }
-
-  tbody tr.order-row {
-    cursor: pointer;
-    border-bottom: 1px solid var(--hairline);
-  }
-  tbody tr.order-row:hover { background: #FAFBFC; }
-
-  tbody td {
-    padding: 18px 16px;
-    font-size: 16px;
-    vertical-align: middle;
-  }
-
-  .order-name { font-family: var(--mono); font-weight: 600; }
-  .customer { color: var(--ink); }
-  .sched-date { font-family: var(--mono); color: var(--muted); font-size: 12px; }
-
-  .badge {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 6px;
-    border: 1px solid var(--hairline);
-    color: var(--muted);
-  }
-
-  .rail {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .rail .tick {
-    width: 28px;
-    height: 9px;
-    background: var(--hairline);
-    border-radius: 1px;
-  }
-  .rail .tick.filled { background: var(--tick-color, var(--accent)); }
-  .rail-label {
-    font-family: var(--mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    margin-left: 10px;
-    color: var(--muted);
-  }
-
-  select.status-select {
-    font-family: var(--mono);
-    font-size: 15px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 10px 12px;
-    min-height: 44px;
-    border: 1px solid var(--hairline);
-    background: var(--surface);
-    color: var(--ink);
-    cursor: pointer;
-  }
-
-  .note-pill {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent);
-  }
-
-  tr.detail-row td {
-    background: #FAFBFC;
-    padding: 18px 14px 24px;
-    border-bottom: 1px solid var(--hairline);
-  }
-
-  .detail-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-  }
-
-  .detail-col h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin: 0 0 10px;
-  }
-
-  .contents-list { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 15px; }
-  .contents-list li { padding: 8px 0; border-bottom: 1px dashed var(--hairline); display: flex; justify-content: space-between; }
-  .contents-list li:last-child { border-bottom: none; }
-  .contents-empty { color: var(--muted); font-size: 15px; font-family: var(--mono); }
-
-  .notes-thread { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
-  .notes-thread li { padding: 10px 0; border-bottom: 1px dashed var(--hairline); font-size: 15px; }
-  .notes-thread .note-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-  .note-form { display: flex; gap: 10px; }
-  .note-form input[type="text"] {
-    flex: 1;
-    padding: 10px 12px;
-    min-height: 44px;
-    border: 1px solid var(--hairline);
-    font-size: 15px;
-    font-family: var(--sans);
-  }
-  .note-form button {
-    font-family: var(--mono);
-    font-size: 13px;
-    text-transform: uppercase;
-    border: 1px solid var(--ink);
-    background: var(--ink);
-    color: var(--surface);
-    padding: 10px 18px;
-    min-height: 44px;
-    cursor: pointer;
-  }
-  .note-form button:hover { background: var(--accent); border-color: var(--accent); }
-
-  .empty-state {
-    padding: 60px 20px;
-    text-align: center;
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 13px;
-  }
+  input, select, textarea { font-family: var(--font); font-size: 16px; }
+  input[type=number] { width: 110px; padding: 7px 10px; }
+  input[type=text] { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .col p:first-child { font-size: 14px !important; }
+  #parTable td:not(:first-child) { white-space: nowrap; }
+  #parTable th, #parTable td:not(:first-child) { padding-left: 5px !important; padding-right: 5px !important; }
+  .par-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  /* Our own slider look, so it is light and identical in Safari, Chrome and Firefox. Blue = you changed it. */
+  .par-slider { -webkit-appearance: none; appearance: none; width: 88px; height: 24px; background: transparent; margin: 0; cursor: pointer; }
+  .par-slider::-webkit-slider-runnable-track { height: 4px; background: #d3d3db; border-radius: 2px; }
+  .par-slider::-moz-range-track { height: 4px; background: #d3d3db; border-radius: 2px; }
+  .par-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #8a8a93; border: 2px solid #fff; box-shadow: 0 0 0 1px #8a8a93; }
+  .par-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #8a8a93; border: 2px solid #fff; box-shadow: 0 0 0 1px #8a8a93; }
+  .par-slider.adj::-webkit-slider-thumb { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .par-slider.adj::-moz-range-thumb { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .par-slider.adj::-webkit-slider-runnable-track { background: #b9d0ef; }
+  .par-slider.adj::-moz-range-track { background: #b9d0ef; }
+  .par-slider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .par-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+  .par-val { display: inline-block; min-width: 52px; text-align: left; font-family: var(--font-mono); font-size: 15px; }
+  .par-val.adj { color: var(--accent); font-weight: 600; }
+  .reset-btn { border: none; background: none; color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .link-btn { border: none; background: none; color: var(--accent); font-size: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
+  .adjusted-note { font-size: 15px; padding: 8px 12px; border-radius: var(--radius); background: #eaf1fc; color: var(--text); margin: 0 0 12px; }
+  .lead-sub.warn { color: var(--warning-text); }
+  #parTable th { white-space: normal; vertical-align: bottom; }
+  .lead-sub { display: block; font-size: 13px; color: var(--text-muted); font-family: var(--font); line-height: 1.25; max-width: 190px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+  .slow-badge { font-size: 13px; padding: 1px 6px; border-radius: 8px; background: var(--warning-bg); color: var(--warning-text); font-family: var(--font); }
+  select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 </style>
 </head>
 <body>
-
-<header>
-  <div style="display:flex; align-items:center; gap:14px;">
-    <img src="/static/hexmodal_logo.png" alt="Hexmodal" style="height:22px; width:auto;">
-    <h1>Delivery Floor</h1>
-  </div>
-  <div class="meta">
-    <span><span class="live-dot"></span> live</span>
-    <span id="last-updated">--</span>
-    <a href="/logout" style="color:var(--muted); text-decoration:none; font-family:var(--mono); font-size:13px; padding:6px 0;">Log out</a>
-    <button id="refresh-btn">Refresh</button>
-  </div>
-</header>
-
-<main>
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="orders">Orders</button>
-    <button class="tab-btn" data-tab="inventory">Inventory</button>
-    <button class="tab-btn" data-tab="leadtimes">Lead Times</button>
-  </div>
-
-  <div id="tab-orders" class="tab-panel">
-    <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-      <input id="search" type="text" placeholder="Filter by order # or customer..." style="margin-bottom:0;">
-      <select id="pm-filter" class="status-select" style="min-width:160px;">
-        <option value="">All project managers</option>
-      </select>
+<div class="wrap">
+  <header>
+    <h1 id="pageTitle">Demand Outlook</h1>
+    <div class="status-line">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Loading...</span>
+      <button id="refreshBtn" onclick="refresh()">Refresh</button>
+      <span id="userBox" style="display:none;margin-left:6px;font-size:15px;"></span>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Order</th>
-          <th>Customer</th>
-          <th>PM</th>
-          <th>Scheduled</th>
-          <th>Progress</th>
-          <th>Set stage</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody id="order-rows">
-        <tr><td colspan="7" class="empty-state">Loading orders...</td></tr>
-      </tbody>
-    </table>
+  </header>
+  <div class="meta" id="metaLine"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtn-forecast" onclick="switchTab('forecast')">Demand Outlook</button>
+    <button class="tab-btn" id="tabBtn-orders" onclick="switchTab('orders')">Active Confirmed Orders</button>
+    <button class="tab-btn" id="tabBtn-metrics" onclick="switchTab('metrics')">Key Metrics</button>
+    <button class="tab-btn" id="tabBtn-revenue" onclick="switchTab('revenue')">Revenue Calculator</button>
+    <button class="tab-btn" id="tabBtn-shipments" onclick="switchTab('shipments')">Warehouse Shipments</button>
   </div>
 
-  <div id="tab-inventory" class="tab-panel" style="display:none;">
-    <table>
-      <thead>
-        <tr>
-          <th>SKU</th>
-          <th>Product</th>
-          <th>On hand</th>
-          <th>Reserved</th>
-          <th>Available</th>
-        </tr>
-      </thead>
-      <tbody id="inventory-rows">
-        <tr><td colspan="5" class="empty-state">Loading inventory...</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <p class="lead" id="pageLead">What customers are likely to order over the next few months, based on past sales.</p>
 
-  <div id="tab-leadtimes" class="tab-panel" style="display:none;">
-    <p style="font-family:var(--mono); font-size:13px; color:var(--muted); margin-bottom:16px;">
-      Type a quantity to check the estimated lead time against current on-hand stock.
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th>SKU</th>
-          <th>Product</th>
-          <th>On hand</th>
-          <th>Quantity to check</th>
-          <th>Lead time</th>
-        </tr>
-      </thead>
-      <tbody id="leadtimes-rows">
-        <tr><td colspan="5" class="empty-state">Loading products...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</main>
+  <div id="errorBox"></div>
 
-<script>
-const STATUS_META = {
-  pending:            { label: "Pending",           short: "PEND", color: "var(--s-pending)" },
-  picking:            { label: "Picking",           short: "PICK", color: "var(--s-picking)" },
-  packed:             { label: "Packed",            short: "PACK", color: "var(--s-packed)" },
-  staged:             { label: "Staged",             short: "STG",  color: "var(--s-staged)" },
-  loaded:             { label: "Loaded",             short: "LOAD", color: "var(--s-loaded)" },
-  out_for_delivery:   { label: "Out for delivery",   short: "OFD",  color: "var(--s-out_for_delivery)" },
-  delivered:          { label: "Delivered",          short: "DLV",  color: "var(--s-delivered)" },
-};
-const STATUS_ORDER = Object.keys(STATUS_META);
-
-let orders = [];
-let expandedId = null;
-
-async function fetchOrders() {
-  const res = await fetch("/orders");
-  if (res.status === 401) { window.location.href = "/login"; return; }
-  orders = await res.json();
-  populatePmFilter();
-  renderTable();
-  document.getElementById("last-updated").textContent =
-    "updated " + new Date().toLocaleTimeString();
-}
-
-function renderRail(currentStatus) {
-  const currentIdx = STATUS_ORDER.indexOf(currentStatus);
-  const color = STATUS_META[currentStatus]?.color || "var(--accent)";
-  const ticks = STATUS_ORDER.map((key, idx) => {
-    const filled = idx <= currentIdx;
-    return `<span class="tick${filled ? " filled" : ""}" style="--tick-color:${color}"></span>`;
-  }).join("");
-  return `<div class="rail">${ticks}<span class="rail-label">${STATUS_META[currentStatus]?.label || currentStatus}</span></div>`;
-}
-
-function renderStatusSelect(order) {
-  const options = STATUS_ORDER.map(key =>
-    `<option value="${key}" ${key === order.local_status ? "selected" : ""}>${STATUS_META[key].label}</option>`
-  ).join("");
-  return `<select class="status-select" data-id="${order.id}" data-name="${order.name}">${options}</select>`;
-}
-
-function renderContents(contents) {
-  if (!contents || contents.length === 0) {
-    return `<p class="contents-empty">No line items found.</p>`;
-  }
-  const items = contents.map(c =>
-    `<li><span>${c.product}</span><span>${c.quantity} ${c.uom}</span></li>`
-  ).join("");
-  return `<ul class="contents-list">${items}</ul>`;
-}
-
-async function renderNotes(pickingId, container) {
-  const res = await fetch(`/orders/${pickingId}/notes`);
-  const notes = await res.json();
-
-  const thread = notes.length
-    ? notes.map(n => `
-        <li>
-          ${escapeHtml(n.note_text)}
-          <div class="note-meta">${n.author ? escapeHtml(n.author) + " -- " : ""}${new Date(n.created_at).toLocaleString()}</div>
-        </li>
-      `).join("")
-    : `<li class="contents-empty" style="border:none;">No notes yet.</li>`;
-
-  container.querySelector(".notes-thread").innerHTML = thread;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function populatePmFilter() {
-  const select = document.getElementById("pm-filter");
-  const current = select.value;
-  const pms = [...new Set(orders.map(o => o.project_manager).filter(Boolean))].sort();
-  select.innerHTML = `<option value="">All project managers</option>` +
-    pms.map(pm => `<option value="${pm}" ${pm === current ? "selected" : ""}>${pm}</option>`).join("");
-}
-
-function renderTable() {
-  const filterVal = document.getElementById("search").value.trim().toLowerCase();
-  const pmVal = document.getElementById("pm-filter").value;
-  const tbody = document.getElementById("order-rows");
-  tbody.innerHTML = "";
-
-  const filtered = orders.filter(o =>
-    (!filterVal ||
-      o.name.toLowerCase().includes(filterVal) ||
-      (o.partner_name || "").toLowerCase().includes(filterVal)) &&
-    (!pmVal || o.project_manager === pmVal)
-  );
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No matching delivery orders.</td></tr>`;
-    return;
-  }
-
-  filtered.forEach(order => {
-    const row = document.createElement("tr");
-    row.className = "order-row";
-    row.dataset.id = order.id;
-    row.innerHTML = `
-      <td class="order-name">${order.name}</td>
-      <td class="customer">${order.partner_name || "--"}</td>
-      <td class="customer">${order.project_manager || "--"}</td>
-      <td class="sched-date">${order.scheduled_date ? order.scheduled_date.slice(0, 16) : "--"}</td>
-      <td>${renderRail(order.local_status)}</td>
-      <td>${renderStatusSelect(order)}</td>
-      <td><span class="note-pill">${order.note_count} note${order.note_count === 1 ? "" : "s"}</span></td>
-    `;
-    tbody.appendChild(row);
-
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("select")) return;
-      toggleDetail(order, row);
-    });
-
-    row.querySelector(".status-select").addEventListener("click", (e) => e.stopPropagation());
-    row.querySelector(".status-select").addEventListener("change", async (e) => {
-      const newStatus = e.target.value;
-      await fetch(`/orders/${order.id}/status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus, picking_name: order.name }),
-      });
-      order.local_status = newStatus;
-      const rail = row.querySelector("td:nth-child(5)");
-      rail.innerHTML = renderRail(newStatus);
-    });
-
-    if (expandedId === order.id) {
-      appendDetailRow(order, row);
-    }
-  });
-}
-
-function toggleDetail(order, row) {
-  const existing = row.nextElementSibling;
-  if (existing && existing.classList.contains("detail-row")) {
-    existing.remove();
-    expandedId = null;
-    return;
-  }
-  document.querySelectorAll(".detail-row").forEach(el => el.remove());
-  expandedId = order.id;
-  appendDetailRow(order, row);
-}
-
-function appendDetailRow(order, row) {
-  const detailRow = document.createElement("tr");
-  detailRow.className = "detail-row";
-  detailRow.innerHTML = `
-    <td colspan="7">
-      <div class="detail-grid">
-        <div class="detail-col">
-          <h3>Contents</h3>
-          ${renderContents(order.contents)}
-        </div>
-        <div class="detail-col">
-          <h3>Notes</h3>
-          <ul class="notes-thread"><li class="contents-empty" style="border:none;">Loading...</li></ul>
-          <div class="note-form">
-            <input type="text" class="note-author" placeholder="Your name" style="max-width:130px;">
-            <input type="text" class="note-text" placeholder="Add a note...">
-            <button type="button">Add</button>
-          </div>
+  <div id="tab-forecast" class="tab-panel">
+    <div class="controls">
+      <div class="control">
+        <label>Forecast horizon</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="range" id="horizon" min="0" max="2" value="0" step="1" style="width:110px;">
+          <span id="horizonOut" style="font-family:var(--font-mono);min-width:64px;">3 months</span>
         </div>
       </div>
-    </td>
-  `;
-  row.after(detailRow);
-  renderNotes(order.id, detailRow);
+    </div>
 
-  const authorInput = detailRow.querySelector(".note-author");
-  authorInput.value = localStorage.getItem("delivery_floor_author") || "";
+    <p class="section-lead">Expected units per device over the chosen period. These are rough estimates: orders arrive in lumps, so they can miss by a wide margin. To decide what to order, use <b>Key Metrics &rarr; PAR and ordering position</b>.</p>
+    <details class="how">
+      <summary>How is this calculated?</summary>
+      <div class="how-body">
+        <div class="formula"><span class="f-result">Projected demand</span> <span class="f-op">=</span> <span class="f-term">Trend</span> <span class="f-op">&times;</span> <span class="f-term">Seasonal factor</span> <span class="f-note">for each month, then added up</span></div>
+        <ul class="terms">
+          <li><b>Trend</b> &ndash; a straight line through the monthly sales history. Is demand rising or falling?</li>
+          <li><b>Seasonal factor</b> &ndash; how much busier or quieter a calendar month usually is. 1.20 means 20% busier than normal.</li>
+        </ul>
+        <div class="example"><b>Example.</b> The trend says 500 units for March, and March is usually 20% busier (1.20). Projected demand for March = 500 &times; 1.20 = <b>600 units</b>. Add up the months in the chosen period for the total.</div>
+      </div>
+    </details>
 
-  const input = detailRow.querySelector(".note-text");
-  const button = detailRow.querySelector("button");
-  const submit = async () => {
-    const text = input.value.trim();
-    const author = authorInput.value.trim();
-    if (!text) return;
-    localStorage.setItem("delivery_floor_author", author);
-    await fetch(`/orders/${order.id}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note_text: text, picking_name: order.name, author }),
-    });
-    input.value = "";
-    renderNotes(order.id, detailRow);
-    order.note_count += 1;
-  };
-  button.addEventListener("click", submit);
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
-  detailRow.addEventListener("click", (e) => e.stopPropagation());
-}
+    <div class="kpis" id="kpiRow"></div>
+    <div id="deviceList"><div class="loading">Loading data from Odoo...</div></div>
+  </div>
 
-document.getElementById("search").addEventListener("input", renderTable);
-document.getElementById("pm-filter").addEventListener("change", renderTable);
+  <div id="tab-orders" class="tab-panel" style="display:none;">
+    <p class="section-lead">Click a device to see each order behind its number.</p>
+    <details class="how">
+      <summary>What counts as &ldquo;confirmed&rdquo;?</summary>
+      <div class="how-body">
+        <p class="plain">A delivery is counted when <b>all three</b> are true:</p>
+        <ol class="terms steps">
+          <li>It is an outgoing delivery from the warehouse to a customer.</li>
+          <li>Its status is <b>Waiting</b> or <b>Ready</b>.</li>
+          <li>Its Ops Status is <b>Shipment in Progress</b>.</li>
+        </ol>
+        <div class="example"><b>Units</b> are the quantity ordered on each line, for tracked devices only. Accessories on the same delivery are not counted.</div>
+      </div>
+    </details>
+    <div class="kpis" id="ordersTotalsRow" style="margin-bottom:16px;"></div>
+    <div id="ordersList"></div>
+  </div>
 
-// --- Tabs -----------------------------------------------------------
+  <div id="tab-revenue" class="tab-panel" style="display:none;">
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p class="section-title">Annual fee per device</p>
+      <p class="section-lead">Enter each device's yearly fee once. It is saved in this browser.</p>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:420px;">
+          <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+            <th style="font-weight:400;padding:6px 8px 6px 0;">Device</th>
+            <th style="font-weight:400;padding:6px 8px;">Annual fee ($/yr)</th>
+            <th style="font-weight:400;padding:6px 0 6px 8px;"></th>
+          </tr></thead>
+          <tbody id="billingConfigTable"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px;flex-wrap:wrap;">
+        <div>
+          <label style="display:block;font-size:15px;color:var(--text-secondary);margin-bottom:4px;">Product code</label>
+          <input type="text" id="extraSkuInput" placeholder="e.g. FHUPS1-UNV-12L-SD" style="width:220px;">
+        </div>
+        <div>
+          <label style="display:block;font-size:15px;color:var(--text-secondary);margin-bottom:4px;">Display name (optional)</label>
+          <input type="text" id="extraSkuNameInput" placeholder="e.g. UPS 12L" style="width:180px;">
+        </div>
+        <button onclick="addExtraSku()">Add product</button>
+      </div>
+      <p id="extraSkuError" style="font-size:15px;color:var(--danger-text);margin:8px 0 0;"></p>
+    </div>
 
-let activeTab = "orders";
-let cachedInventory = [];
-const leadTimeQuantities = {}; // sku -> last-typed quantity, kept across refreshes
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p class="section-title">Upload deliveries</p>
+      <p class="section-lead">Upload a spreadsheet of deliveries to customers (.xlsx or .csv).</p>
+      <details class="how">
+        <summary>How is revenue calculated?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">Annual revenue</span> <span class="f-op">=</span> <span class="f-term">Devices delivered</span> <span class="f-op">&times;</span> <span class="f-term">Annual fee per device</span> <span class="f-note">for each device, then added up</span></div>
+          <ul class="terms">
+            <li><b>Devices delivered</b> &ndash; units on lines going to a customer location, from transfers that are Done.</li>
+            <li><b>Added products</b> &ndash; products you add under the fee table count as devices too.</li>
+            <li><b>Spares</b> &ndash; left out when &ldquo;Don't count spares&rdquo; is ticked. They come from the file's Spare Quantity column.</li>
+            <li><b>Skipped</b> &ndash; internal moves and returns are not deliveries to customers. They appear on the Warehouse Shipments tab.</li>
+            <li><b>The file needs</b> a product column (SKU or Internal Reference) and a quantity column.</li>
+          </ul>
+          <div class="example"><b>Example.</b> A device with a $120 annual fee and 50 units delivered adds 50 &times; $120 = <b>$6,000</b> a year.</div>
+        </div>
+      </details>
+      <input type="file" id="revenueFileInput" accept=".xlsx,.xls,.csv" onchange="handleRevenueFile(event)">
+      <div class="check-row">
+        <label class="check"><input type="checkbox" id="includeNonDoneCheckbox" onchange="reprocessRevenueIfLoaded()"> Also count transfers that are not Done yet</label>
+      </div>
+      <div class="check-row">
+        <label class="check"><input type="checkbox" id="excludeSparesCheckbox" onchange="onExcludeSparesChange()"> Don't count spares</label>
+        <span class="help">Uses the file's Spare Quantity column, or units shipped beyond what was ordered if there isn't one. Remembered for next time.</span>
+      </div>
+      <p id="revenueFileStatus" style="font-size:15px;color:var(--text-muted);margin:8px 0 0;"></p>
+    </div>
 
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    activeTab = btn.dataset.tab;
-    document.getElementById("tab-orders").style.display = activeTab === "orders" ? "" : "none";
-    document.getElementById("tab-inventory").style.display = activeTab === "inventory" ? "" : "none";
-    document.getElementById("tab-leadtimes").style.display = activeTab === "leadtimes" ? "" : "none";
-    if (activeTab === "inventory") fetchInventory();
-    if (activeTab === "leadtimes") fetchInventory().then(renderLeadTimes);
-  });
-});
+    <div id="revenueResults" style="display:none;">
+      <div class="kpis" id="revenueKpiRow" style="margin-bottom:16px;"></div>
+      <div class="device" style="padding:16px;margin-bottom:16px;">
+        <p class="section-title" style="margin-bottom:12px;">Revenue by device</p>
+        <table style="width:100%;border-collapse:collapse;font-size:15px;" id="revenueByDeviceTable"></table>
+      </div>
+      <div class="device" style="padding:16px;">
+        <p class="section-title">Other items</p>
+        <p class="section-lead">Items that are not tracked devices. No revenue is calculated for them.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:15px;" id="revenueAccessoriesTable"></table>
+      </div>
+    </div>
+  </div>
 
-document.getElementById("refresh-btn").addEventListener("click", () => {
-  if (activeTab === "orders") fetchOrders();
-  else if (activeTab === "inventory") fetchInventory();
-  else fetchInventory().then(renderLeadTimes);
-});
+  <div id="tab-shipments" class="tab-panel" style="display:none;">
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p class="section-title">Upload a transfer export</p>
+      <p class="section-lead">Upload Done transfers that left the warehouse (source = WH/Stock).</p>
+      <details class="how">
+        <summary>What counts as &ldquo;shipped out&rdquo;?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">Shipped out</span> <span class="f-op">=</span> <span class="f-term">Units on Done transfers from the warehouse</span> <span class="f-op">&minus;</span> <span class="f-term">Moves that stay inside the warehouse</span></div>
+          <ul class="terms">
+            <li><b>Counted</b> &ndash; units that went to customers, to vendors (returns) or to other company locations such as HO/Stock.</li>
+            <li><b>Not counted</b> &ndash; moves inside the warehouse, such as to Pre-Production. They are listed for reference.</li>
+            <li><b>Skipped</b> &ndash; lines shipped from another location (for example HO/Stock). They did not leave this warehouse.</li>
+            <li><b>Spares</b> &ndash; included, because they physically leave.</li>
+          </ul>
+          <div class="example"><b>Example.</b> 40 devices moved from WH/Stock to HO/Stock <b>count</b> as shipped out. 40 devices moved from WH/Stock to WH/Stock/Pre-Production <b>do not</b>.</div>
+          <p class="plain">For revenue, use the Revenue Calculator with an export of customer deliveries instead.</p>
+        </div>
+      </details>
+      <input type="file" id="shipFileInput" accept=".xlsx,.xls,.csv" onchange="handleShipmentsFile(event)">
+      <p id="shipFileStatus" style="font-size:15px;color:var(--text-muted);margin:8px 0 0;"></p>
+    </div>
 
-// --- Inventory --------------------------------------------------------
+    <div id="shipResults" style="display:none;">
+      <div class="kpis" id="shipKpiRow" style="margin-bottom:16px;"></div>
+      <div class="device" style="padding:16px;margin-bottom:16px;">
+        <p class="section-title" style="margin-bottom:4px;">Where it went</p>
+        <p class="section-lead">Units by destination. Moves inside the warehouse are listed but not counted.</p>
+        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:15px;min-width:560px;" id="shipByDestTable"></table></div>
+      </div>
+      <div class="device" style="padding:16px;margin-bottom:16px;">
+        <p class="section-title" style="margin-bottom:12px;">Devices shipped out, by device</p>
+        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:15px;min-width:560px;" id="shipByDeviceTable"></table></div>
+      </div>
+      <div class="device" style="padding:16px;">
+        <p class="section-title" style="margin-bottom:12px;">Other items shipped out</p>
+        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:15px;" id="shipOtherTable"></table></div>
+      </div>
+    </div>
+  </div>
 
-async function fetchInventory() {
-  const res = await fetch("/inventory");
-  if (res.status === 401) { window.location.href = "/login"; return; }
-  cachedInventory = await res.json();
-  renderInventory(cachedInventory);
-  document.getElementById("last-updated").textContent =
-    "updated " + new Date().toLocaleTimeString();
-}
+  <div id="tab-metrics" class="tab-panel" style="display:none;">
+    <div class="controls">
+      <div class="control">
+        <label>Time period (delivery times and order age)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <button class="window-btn" data-window="1d" onclick="setMetricsWindow('1d')">1 day</button>
+          <button class="window-btn" data-window="1w" onclick="setMetricsWindow('1w')">1 week</button>
+          <button class="window-btn" data-window="1mo" onclick="setMetricsWindow('1mo')">1 month</button>
+          <button class="window-btn" data-window="3mo" onclick="setMetricsWindow('3mo')">3 months</button>
+          <button class="window-btn" data-window="6mo" onclick="setMetricsWindow('6mo')">6 months</button>
+          <button class="window-btn active" data-window="12mo" onclick="setMetricsWindow('12mo')">12 months</button>
+        </div>
+      </div>
+    </div>
 
-function renderInventory(items) {
-  const tbody = document.getElementById("inventory-rows");
-  tbody.innerHTML = "";
+    <div class="kpis" id="metricsKpiRow"></div>
 
-  if (!items || items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No inventory items configured.</td></tr>`;
-    return;
-  }
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p class="section-title">Warehouse turns</p>
+      <p class="section-lead">How many times our average stock was sold and replaced over the last 12 months. Higher means stock moves faster.</p>
+      <details class="how">
+        <summary>How is this calculated?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">Turns</span> <span class="f-op">=</span> <span class="f-term">Units shipped in the last 12 months</span> <span class="f-op">&divide;</span> <span class="f-term">Average stock on hand</span></div>
+          <div class="formula"><span class="f-result">Days of cover</span> <span class="f-op">=</span> <span class="f-term">Stock on hand now</span> <span class="f-op">&divide;</span> <span class="f-term">Units shipped per day</span> <span class="f-note">(units shipped &divide; 365)</span></div>
+          <ul class="terms">
+            <li><b>Units shipped</b> &ndash; delivered to customers over the last 12 months.</li>
+            <li><b>Average stock on hand</b> &ndash; the average of 13 snapshots: today, plus the same day of each of the last 12 months.</li>
+            <li><b>Days of cover</b> &ndash; how long today's stock would last at the usual pace.</li>
+            <li>Always covers the last 12 months. The time period buttons above do not change it.</li>
+          </ul>
+          <div class="example" id="turnsExample"></div>
+        </div>
+      </details>
+      <div id="turnsWarning" style="display:none;font-size:15px;padding:8px 12px;border-radius:var(--radius);background:var(--warning-bg);color:var(--warning-text);margin-bottom:12px;"></div>
+      <div id="turnsKpiRow" class="kpis" style="margin-bottom:12px;"></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:720px;" id="turnsTable"></table>
+      </div>
+    </div>
 
-  items.forEach(item => {
-    const row = document.createElement("tr");
-    const lowStock = item.available <= 0;
-    row.innerHTML = `
-      <td class="sku-cell">${item.sku}</td>
-      <td>${item.name}</td>
-      <td>${item.on_hand} ${item.uom || ""}</td>
-      <td>${item.reserved} ${item.uom || ""}</td>
-      <td class="${lowStock ? "qty-low" : ""}">${item.available} ${item.uom || ""}</td>
-    `;
-    tbody.appendChild(row);
-  });
-}
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p class="section-title">PAR and ordering position</p>
+      <p class="section-lead">How much stock we should hold, what we effectively have, and how much to order now.</p>
+      <details class="how">
+        <summary>How is this calculated?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">PAR</span> <span class="f-op">=</span> <span class="f-term">Average daily shipments</span> <span class="f-op">&times;</span> <span class="f-term">Lead time (days)</span> <span class="f-op">&times;</span> <span class="f-term">1 + Safety stock</span></div>
+          <div class="formula"><span class="f-result">Position</span> <span class="f-op">=</span> <span class="f-term">On hand now</span> <span class="f-op">&minus;</span> <span class="f-term">Outgoing confirmed</span> <span class="f-op">+</span> <span class="f-term">Buildable</span> <span class="f-op">+</span> <span class="f-term">Buildable from incoming parts</span></div>
+          <div class="formula"><span class="f-result">Order now</span> <span class="f-op">=</span> <span class="f-term">PAR</span> <span class="f-op">&minus;</span> <span class="f-term">Position</span> <span class="f-note">never below 0, rounded to the nearest 100</span></div>
+          <div class="formula"><span class="f-result">Buildable</span> <span class="f-op">=</span> <span class="f-term">Smallest of (parts on hand &divide; parts needed per unit)</span> <span class="f-note">across all of a device's parts</span></div>
+          <ul class="terms">
+            <li><b>PAR</b> &ndash; the stock level we want to hold: enough to cover shipments while a new order arrives, plus a safety buffer. Rounded to the nearest 100. If Odoo has a PAR for a device, that number is used instead.</li>
+            <li><b>Lead time</b> &ndash; the Delivery Lead Time on the product's Purchase tab in Odoo. With no vendor in Odoo, the default in the box is used.</li>
+            <li><b>Safety stock</b> &ndash; an extra buffer on top of expected demand. It starts at the default above.</li>
+            <li><b>Average daily shipments</b> &ndash; units shipped to customers in the last 12 months &divide; 365.</li>
+            <li><b>Outgoing confirmed</b> &ndash; units already promised to customers. They are about to leave.</li>
+            <li><b>Buildable</b> &ndash; units we could assemble today from parts on hand. The scarcest part sets the limit.</li>
+            <li><b>Buildable from incoming parts</b> &ndash; extra units we could assemble once parts already on order arrive.</li>
+            <li><b>Shared parts</b> &ndash; when several devices use the same part, it is split between them in proportion to how much each one ships.</li>
+            <li>Devices we buy finished, like HEX-G, have no parts, so only stock on hand counts for them.</li>
+            <li><b>Sliders</b> &ndash; each device has its own lead time and safety stock slider. A blue slider means you changed it. &#8634; puts it back.</li>
+            <li><b>Tip</b> &ndash; hover a number to see which part is the limit, or click a device's Incoming parts cell for a part-by-part breakdown.</li>
+          </ul>
+          <div class="example" id="parExample"></div>
+        </div>
+      </details>
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+        <div class="control">
+          <label>Default lead time (days)</label>
+          <input type="number" id="leadTime" value="91" min="1" max="365" step="1">
+          <span class="help">Used when Odoo has no vendor lead time (91 days is about 3 months)</span>
+        </div>
+        <div class="control">
+          <label>Default safety stock</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input type="range" id="safetyStock" min="0" max="60" value="20" step="5" style="width:110px;">
+            <span id="safetyStockOut" style="font-family:var(--font-mono);min-width:32px;">20%</span>
+          </div>
+          <span class="help">Starting point for every device</span>
+        </div>
+        <div class="control">
+          <label>If a product has several vendors</label>
+          <select id="vendorPolicy">
+            <option value="default">Use the first one listed in Odoo</option>
+            <option value="slowest">Use the slowest</option>
+            <option value="fastest">Use the fastest</option>
+          </select>
+          <span class="help">Which vendor's lead time to use</span>
+        </div>
+      </div>
+      <p id="parNote" style="font-size:15px;color:var(--text-secondary);margin:0 0 12px;"></p>
+      <div id="parAdjusted" class="adjusted-note" style="display:none;"></div>
+      <div id="parWarning" style="display:none;font-size:15px;padding:8px 12px;border-radius:var(--radius);background:var(--warning-bg);color:var(--warning-text);margin-bottom:12px;"></div>
+      <div id="parKpiRow" class="kpis" style="margin-bottom:12px;"></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:1180px;" id="parTable"></table>
+      </div>
+    </div>
 
-// --- Lead Times ---------------------------------------------------------
+    <div class="device" id="vendorCard" style="padding:16px;margin-bottom:16px;display:none;">
+      <p class="section-title">PAR by vendor</p>
+      <p class="section-lead">Each device is listed under the vendor that sets its lead time: its own vendor, or for a device we build, the vendor of its slowest part.</p>
+      <details class="how">
+        <summary>How are vendors chosen?</summary>
+        <div class="how-body">
+          <ol class="terms steps">
+            <li>A device we build takes its lead time from its <b>slowest part</b>. That part's vendor is the one shown.</li>
+            <li>A device we buy finished takes it from the device's own vendor.</li>
+            <li>A product with several vendors follows the choice above the table: the first listed in Odoo, the slowest, or the fastest.</li>
+            <li>Moving a device's lead time slider changes its PAR but not its vendor. The device is marked &ldquo;adjusted&rdquo;.</li>
+            <li>With no vendor lead time in Odoo, the default lead time is used and the device is grouped under &ldquo;No vendor lead time in Odoo&rdquo;.</li>
+          </ol>
+          <p class="plain">To change a vendor or a lead time, edit it on the product's Purchase tab in Odoo. The dashboard picks it up on the next refresh.</p>
+        </div>
+      </details>
+      <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:15px;min-width:760px;" id="vendorTable"></table></div>
+    </div>
 
-const LEADTIME_COLORS = { 1: "var(--s-delivered)", 2: "var(--s-staged)", 3: "var(--s-loaded)", 4: "var(--s-out_for_delivery)" };
+    <div class="device" style="padding:16px;">
+      <p class="section-title">Delivery cycle time</p>
+      <p class="section-lead">How many days a delivery takes, from the day it is Waiting to the day it is Done.</p>
+      <details class="how">
+        <summary>How is this calculated?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">Cycle time (days)</span> <span class="f-op">=</span> <span class="f-term">Date marked Done</span> <span class="f-op">&minus;</span> <span class="f-term">Date it became Waiting</span></div>
+          <ul class="terms">
+            <li><b>Average</b> &ndash; all the cycle times added up, divided by the number of deliveries.</li>
+            <li><b>Median</b> &ndash; the middle value: half of the deliveries were faster, half were slower.</li>
+            <li><b>Unusually long deliveries</b> are left out of both, so one stuck order does not distort them. The page says how many.</li>
+            <li><b>All deliveries</b> counts every completed delivery to a customer. <b>Device-only</b> counts deliveries where every line is one of our tracked devices.</li>
+          </ul>
+          <div class="example"><b>Example.</b> Waiting on October 1 and Done on October 5 is a cycle time of <b>4 days</b>.</div>
+        </div>
+      </details>
+      <div id="cycleTimeCompare" style="display:flex;gap:24px;margin-bottom:8px;"></div>
+      <p id="outlierNotice" style="font-size:15px;color:var(--text-muted);margin:0;"></p>
+      <p id="reconciliationNotice" style="font-size:15px;color:var(--text-muted);margin:4px 0 0;"></p>
+    </div>
 
-// Rules, checked in order:
-//   qty < 50            -> 1 week   IF on_hand > 50   else bumped to the 2-week tier
-//   50 <= qty <= 100     -> 2 weeks  IF on_hand > 100  else bumped to the 3-week tier
-//   100 < qty <= 200     -> 3 weeks  (on-hand doesn't change this tier)
-//   qty > 200            -> 4 weeks  (on-hand doesn't change this tier)
-function calcLeadTime(qty, onHand) {
-  if (qty < 50) {
-    if (onHand > 50) return { weeks: 1, bumped: false };
-    return { weeks: 2, bumped: true };
-  }
-  if (qty <= 100) {
-    if (onHand > 100) return { weeks: 2, bumped: false };
-    return { weeks: 3, bumped: true };
-  }
-  if (qty <= 200) {
-    return { weeks: 3, bumped: false };
-  }
-  return { weeks: 4, bumped: false };
-}
+    <div class="device" style="padding:16px;margin-top:12px;">
+      <p class="section-title">Cycle time by device</p>
+      <p class="section-lead">The same measure, but only for deliveries that contained just that one device. Devices that rarely ship alone may show little or no data.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:15px;" id="byDeviceTable"></table>
+    </div>
 
-function renderLeadTimes() {
-  const tbody = document.getElementById("leadtimes-rows");
-  tbody.innerHTML = "";
+    <div class="device" style="padding:16px;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <p class="section-title" style="margin:0;">Sales order age at fulfillment</p>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:15px;color:var(--text-secondary);">Count by:</span>
+          <button class="window-btn age-mode-btn active" data-mode="units" onclick="setOrderAgeMode('units')">Devices</button>
+          <button class="window-btn age-mode-btn" data-mode="orders" onclick="setOrderAgeMode('orders')">Orders</button>
+        </div>
+      </div>
+      <p class="section-lead">How long customers waited from placing an order to shipment, grouped by age.</p>
+      <details class="how">
+        <summary>How is this calculated?</summary>
+        <div class="how-body">
+          <div class="formula"><span class="f-result">Order age (days)</span> <span class="f-op">=</span> <span class="f-term">Ship date</span> <span class="f-op">&minus;</span> <span class="f-term">Sales order date</span></div>
+          <ul class="terms">
+            <li>Each delivery goes into a group: 0&ndash;90, 90&ndash;180, 180&ndash;360 or 360+ days. Exactly 90 days is in the 90&ndash;180 group.</li>
+            <li><b>Devices</b> counts the tracked devices on those deliveries. <b>Orders</b> counts the deliveries themselves.</li>
+            <li>Only deliveries linked to a sales order are included, and accessories are not counted.</li>
+            <li>It includes the time before a delivery even starts processing, so it is longer than the cycle time above.</li>
+          </ul>
+          <div class="example"><b>Example.</b> Ordered on January 10 and shipped on June 20 is <b>161 days</b>, so it falls in the &ldquo;90&ndash;180 days&rdquo; group.</div>
+        </div>
+      </details>
+      <div id="orderAgeBuckets" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;"></div>
+      <p id="orderFulfillmentCoverage" style="font-size:15px;color:var(--text-muted);margin:8px 0 0;"></p>
+    </div>
 
-  if (!cachedInventory || cachedInventory.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No inventory items configured.</td></tr>`;
-    return;
-  }
+    <div class="device" style="padding:16px;margin-bottom:16px;">
+      <p id="orderAgeChartTitle" class="section-title" style="margin-bottom:12px;">Sales order age at fulfillment, by week (this year)</p>
+      <div class="chart-box" style="height:280px;"><canvas id="orderAgeWeeklyChart"></canvas></div>
+    </div>
 
-  cachedInventory.forEach(item => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td class="sku-cell">${item.sku}</td>
-      <td>${item.name}</td>
-      <td>${item.on_hand} ${item.uom || ""}</td>
-      <td><input type="number" min="0" class="qty-check-input" data-sku="${item.sku}" placeholder="Qty"></td>
-      <td class="leadtime-result">--</td>
-    `;
-    tbody.appendChild(row);
+    <div class="device" style="padding:16px;margin-top:12px;">
+      <p class="section-title" style="margin-bottom:12px;">Average delivery cycle time, by month (days)</p>
+      <div class="chart-box" style="height:260px;"><canvas id="cycleTimeChart"></canvas></div>
+    </div>
+    <div class="device" style="padding:16px;margin-top:12px;">
+      <p class="section-title" style="margin-bottom:12px;">Average delivery cycle time, by week (days)</p>
+      <div class="chart-box" style="height:260px;"><canvas id="cycleTimeWeeklyChart"></canvas></div>
+    </div>
+  </div>
+</div>
 
-    const input = row.querySelector(".qty-check-input");
-    const resultCell = row.querySelector(".leadtime-result");
 
-    const update = () => {
-      const qty = parseFloat(input.value);
-      if (isNaN(qty) || input.value.trim() === "") {
-        resultCell.innerHTML = "--";
-        delete leadTimeQuantities[item.sku];
-        return;
-      }
-      leadTimeQuantities[item.sku] = qty;
-      const { weeks, bumped } = calcLeadTime(qty, item.on_hand);
-      const color = LEADTIME_COLORS[weeks];
-      resultCell.innerHTML = `
-        <span class="leadtime-badge" style="border-color:${color}; color:${color};">${weeks} week${weeks === 1 ? "" : "s"}</span>
-        ${bumped ? `<span class="leadtime-note">on-hand too low for faster tier</span>` : ""}
-      `;
-    };
+<script>
+let DATA = null;
+let charts = {};
+const manualEstimates = {};
 
-    if (leadTimeQuantities[item.sku] !== undefined) {
-      input.value = leadTimeQuantities[item.sku];
-      update();
+function mean(a){ return a.reduce((s,v)=>s+v,0)/a.length; }
+
+function fitTrendSeasonal(series){
+  const n = series.length;
+  const ys = series.map(p=>p.qty);
+  const xs = ys.map((_,i)=>i);
+  const mx = mean(xs), my = mean(ys);
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num += (xs[i]-mx)*(ys[i]-my); den += (xs[i]-mx)**2; }
+  const slope = den===0 ? 0 : num/den;
+  const intercept = my - slope*mx;
+  const trendAt = i => Math.max(0, intercept + slope*i);
+  const ratiosByMonth = {};
+  series.forEach((p,i)=>{
+    const t = trendAt(i);
+    if(t > 0.5){
+      ratiosByMonth[p.month] = ratiosByMonth[p.month] || [];
+      ratiosByMonth[p.month].push(p.qty/t);
     }
-    input.addEventListener("input", update);
+  });
+  const seasonalIndex = {};
+  for(let m=1;m<=12;m++){
+    seasonalIndex[m] = ratiosByMonth[m] && ratiosByMonth[m].length ? mean(ratiosByMonth[m]) : 1;
+  }
+  const avgIdx = mean(Object.values(seasonalIndex));
+  for(let m=1;m<=12;m++){ seasonalIndex[m] = avgIdx > 0 ? seasonalIndex[m]/avgIdx : 1; }
+  return { trendAt, seasonalIndex, n };
+}
+
+const HORIZONS = [3, 6, 12];
+
+function getHorizonMonths(){
+  return HORIZONS[parseInt(document.getElementById('horizon').value, 10)];
+}
+
+function nextMonths(lastYear, lastMonth, count){
+  const out = [];
+  let y = lastYear, m = lastMonth;
+  for(let i=0;i<count;i++){
+    m += 1;
+    if(m === 13){ m = 1; y += 1; }
+    out.push({year:y, month:m});
+  }
+  return out;
+}
+
+function forecastHorizon(sku, horizonMonths){
+  const series = DATA.monthly_series[sku] || [];
+  if(series.length === 0){
+    const est = manualEstimates[sku] || 0;
+    return { monthly: Array(horizonMonths).fill(est), dataQuality: 'none', n: 0, future: [] };
+  }
+  const { trendAt, seasonalIndex, n } = fitTrendSeasonal(series);
+  const last = series[series.length-1];
+  const future = nextMonths(last.year, last.month, horizonMonths);
+  const monthly = future.map((f,k) => Math.max(0, Math.round(trendAt(n-1+k+1) * seasonalIndex[f.month])));
+  let quality = 'good';
+  const nonZeroMonths = series.filter(p=>p.qty>0).length;
+  // Longer horizons extrapolate further past the trend fit, so the data bar to call
+  // something "good" scales with how far out we're projecting.
+  if(n < horizonMonths * 2 || nonZeroMonths < 4) quality = 'limited';
+  return { monthly, dataQuality: quality, n, future };
+}
+
+// Demand outlook only: projected units over the chosen horizon from sales history (trend +
+// seasonality). It gives no order quantity on purpose - ordering is the PAR card on the Key
+// Metrics tab, which builds in the supply side (outgoing confirmed, reserved buildable).
+function computeOutlook(sku){
+  const horizonMonths = getHorizonMonths();
+  const fc = forecastHorizon(sku, horizonMonths);
+  return { horizonDemand: Math.round(fc.monthly.reduce((s,v)=>s+v,0)), fc, horizonMonths };
+}
+
+function sparklinePath(series, w, h){
+  if(!series || series.length < 2) return '';
+  const vals = series.slice(-24).map(p=>p.qty);
+  const max = Math.max(...vals, 1);
+  const step = w/(vals.length-1);
+  return vals.map((v,i)=>`${i===0?'M':'L'}${(i*step).toFixed(1)},${(h-(v/max)*h).toFixed(1)}`).join(' ');
+}
+
+function render(){
+  if(!DATA) return;
+  const skus = Object.keys(DATA.inventory);
+  const results = skus.map(sku => ({ sku, ...computeOutlook(sku) }));
+  const totalDemand = results.reduce((s,r)=>s+r.horizonDemand,0);
+  const horizonMonths = getHorizonMonths();
+
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="kpi"><p>Projected demand, next ${horizonMonths} mo</p><p>${totalDemand.toLocaleString()}</p></div>
+  `;
+
+  document.getElementById('deviceList').innerHTML = results.map(r => {
+    const inv = DATA.inventory[r.sku];
+    const noData = r.fc.dataQuality === 'none';
+    const spark = sparklinePath(DATA.monthly_series[r.sku], 100, 28);
+    return `
+    <div class="device">
+      <div class="device-row" onclick="toggleDetail('${r.sku}')">
+        <div class="name"><p>${inv.name}</p><p>${r.sku}</p></div>
+        <div class="col spark">${spark ? `<svg width="100" height="28" viewBox="0 0 100 28"><path d="${spark}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>` : `<span style="font-size:15px;color:var(--text-muted);">no history</span>`}</div>
+        <div class="col"><p>On hand</p><p>${inv.onHand.toLocaleString()}</p></div>
+        <div class="col"><p>Confirmed outgoing</p><p>${inv.outgoingConfirmed.toLocaleString()}</p></div>
+        <div class="col"><p>Unconfirmed outgoing</p><p>${inv.outgoingUnconfirmed.toLocaleString()}</p></div>
+        ${inv.manufacturable ? `<div class="col" title="Total this device could build with every part to itself. The Key Metrics tab shows its reserved share, where parts used by several devices are split by popularity."><p>Buildable now</p><p>${totalBuildable(inv.manufacturable).toLocaleString()}</p></div>` : ''}
+        <div class="col order"><p>Projected demand (${horizonMonths} mo)</p><p>${r.horizonDemand.toLocaleString()}</p></div>
+        <span class="chev" id="chev-${r.sku}">&#9662;</span>
+      </div>
+      <div class="detail" id="detail-${r.sku}">
+        ${noData ? `
+          <div class="manual-input">
+            <span style="font-size:15px;color:var(--text-secondary);">No sales history found. Estimated avg monthly demand:</span>
+            <input type="number" value="${manualEstimates[r.sku]||0}" min="0" step="10" oninput="manualEstimates['${r.sku}']=parseFloat(this.value)||0; render();">
+            <span style="font-size:15px;color:var(--text-muted);">units / month</span>
+          </div>
+        ` : `
+          <div class="detail-meta">
+            <span>${r.fc.n} months of history</span>
+            <span>${r.fc.dataQuality === 'limited' ? '<span style="color:var(--warning-text);">Limited data - treat forecast with caution</span>' : 'Trend + seasonality applied'}</span>
+          </div>
+          <div class="chart-box"><canvas id="chart-${r.sku}"></canvas></div>
+          ${inv.manufacturable ? renderBom(r, inv.manufacturable) : ''}
+        `}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// The Forecast tab shows a device's TOTAL buildable: what it could build if it had every part to
+// itself. The Key Metrics tab shows its RESERVED share instead (parts used by several devices are
+// split by popularity there). Data from an older connector has no total, so it falls back.
+function totalBuildable(mfg){
+  return typeof mfg.standaloneQty === 'number' ? mfg.standaloneQty : mfg.manufacturableQty;
+}
+
+function renderBom(r, mfg){
+  const rows = mfg.components.map(c => {
+    const isBottleneck = c.component === mfg.bottleneckComponent;
+    const shared = !c.missing && (c.usedBy || 1) > 1;
+    const label = c.missing ? 'not found in Odoo' : `${c.onHand.toLocaleString()} on hand / ${c.qtyPerUnit} per unit` + (shared ? ` &middot; shared by ${c.usedBy} devices` : '');
+    const incomingLabel = c.missing ? '-' : (c.incoming > 0 ? c.incoming.toLocaleString() : '-');
+    return `<tr style="${isBottleneck ? 'background:var(--warning-bg);' : ''}">
+      <td>${c.component}${isBottleneck ? ' <span style="color:var(--warning-text);font-size:13px;">(limiting)</span>' : ''}</td>
+      <td style="text-align:right;color:var(--text-secondary);">${label}</td>
+      <td style="text-align:right;color:var(--text-secondary);font-family:var(--font-mono);">${incomingLabel}</td>
+      <td style="text-align:right;font-family:var(--font-mono);">${c.buildable.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+  const total = totalBuildable(mfg);
+  return `
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border);">
+      <p style="font-size:15px;font-weight:500;margin:0 0 8px;">
+        Buildable from current components: ${total.toLocaleString()} units
+        ${(typeof mfg.standaloneQty === 'number' && mfg.manufacturableQty < total) ? `<span style="color:var(--text-muted);font-weight:400;"> (total with every part to itself - Key Metrics reserves ${mfg.manufacturableQty.toLocaleString()} for this device because it shares parts with other devices)</span>` : ''}
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:15px;">
+        <thead><tr style="color:var(--text-secondary);text-align:left;">
+          <th style="font-weight:400;padding:4px 0;">Component</th>
+          <th style="font-weight:400;padding:4px 0;text-align:right;">Stock</th>
+          <th style="font-weight:400;padding:4px 0;text-align:right;">Incoming</th>
+          <th style="font-weight:400;padding:4px 0;text-align:right;" title="Units this one component alone would allow">Buildable</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function toggleDetail(sku){
+  const el = document.getElementById('detail-'+sku);
+  const chev = document.getElementById('chev-'+sku);
+  const opening = el.style.display !== 'block';
+  el.style.display = opening ? 'block' : 'none';
+  chev.style.transform = opening ? 'rotate(180deg)' : 'rotate(0deg)';
+  if(opening && DATA.monthly_series[sku] && DATA.monthly_series[sku].length){
+    requestAnimationFrame(() => drawChart(sku));
+  }
+}
+
+function drawChart(sku){
+  const ctx = document.getElementById('chart-'+sku);
+  if(!ctx) return;
+  if(charts[sku]) charts[sku].destroy();
+  const horizonMonths = getHorizonMonths();
+  const historyWindow = Math.max(18, horizonMonths * 2);
+  const series = DATA.monthly_series[sku].slice(-historyWindow);
+  const fc = forecastHorizon(sku, horizonMonths);
+  const histLabels = series.map(p => `${p.month}/${String(p.year).slice(2)}`);
+  const fcLabels = fc.future.map(f => `${f.month}/${String(f.year).slice(2)}`);
+  const labels = histLabels.concat(fcLabels);
+  const histData = series.map(p=>p.qty).concat(Array(horizonMonths).fill(null));
+  const fcData = Array(series.length-1).fill(null).concat([series[series.length-1].qty]).concat(fc.monthly);
+  charts[sku] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Actual', data: histData, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent'), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, tension: 0.15 },
+      { label: 'Forecast', data: fcData, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--forecast'), backgroundColor: 'transparent', borderWidth: 2, borderDash: [5,4], pointRadius: 2, tension: 0.15 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { autoSkip: true, maxTicksLimit: 9, font: {size:13} }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { font: {size:13} }, grid: { color: 'rgba(128,128,128,0.15)' } }
+      }
+    }
   });
 }
 
-fetchOrders();
-setInterval(() => {
-  if (activeTab === "orders") fetchOrders();
-  else if (activeTab === "inventory") fetchInventory();
-  else fetchInventory().then(renderLeadTimes);
-}, 30000);
-</script>
+function setStatus(text, ok){
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusDot').style.background = ok ? 'var(--success-text)' : 'var(--danger-text)';
+}
 
+function showError(msg){
+  document.getElementById('errorBox').innerHTML = `<div class="error">${msg}</div>`;
+}
+
+// ---------- Loading data ----------
+// The server pulls from Odoo in the background (it can take a while), so this page never waits on
+// one long request: it asks for the status every few seconds, shows whatever data exists as soon
+// as there is some, and swaps in the newer copy when a refresh finishes.
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+function goToLogin(){ window.location.href = '/login'; }
+function escapeHtml(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// Every call goes through here so an expired or missing sign-in sends you to the login page.
+async function api(path, opts){
+  const resp = await fetch(path, opts);
+  if(resp.status === 401){ goToLogin(); throw new Error('Signed out - going to the login page'); }
+  return resp;
+}
+
+// Reads a JSON reply. If the server sent something else (for example an HTML "Not Found" page from
+// an older server.py, or an error page from a proxy), say so clearly instead of the browser's cryptic
+// "The string did not match the expected pattern".
+async function apiJson(path, opts){
+  const resp = await api(path, opts);
+  try {
+    return await resp.json();
+  } catch(e) {
+    const err = new Error(`the server sent an unexpected reply to ${path} (HTTP ${resp.status})`);
+    err.notJson = true;
+    err.status = resp.status;
+    throw err;
+  }
+}
+
+// An older server.py (from before background refresh and logins) answers /api/data and /api/refresh
+// with all the data in one go and has no /api/status. Keep working with it, and say so, so replacing
+// the files one at a time never leaves the dashboard broken.
+let legacyServer = false;
+function showLegacyNotice(){
+  document.getElementById('errorBox').innerHTML +=
+    '<div class="error">This page is talking to an older server.py (no background refresh or login). Replace server.py with the latest version and restart it.</div>';
+}
+async function legacyLoad(force){
+  const json = await apiJson(force ? '/api/refresh' : '/api/data', { method: force ? 'POST' : 'GET' });
+  if(json.error) throw new Error(json.error);
+  applyData(json);
+  showLegacyNotice();
+}
+
+function applyData(json){
+  DATA = json;
+  document.getElementById('metaLine').textContent =
+    `Warehouse: ${DATA.warehouse} (${DATA.warehouse_code}) - fetched ${new Date(DATA.fetched_at).toLocaleString()}`;
+  if(DATA.missing_skus && DATA.missing_skus.length){
+    showError(`No product found in Odoo for: ${DATA.missing_skus.join(', ')}`);
+  }
+  setStatus('Live', true);
+  render();
+  renderMetrics();
+  renderBillingConfigTable();
+}
+
+let loadInProgress = false;
+async function load(force){
+  if(loadInProgress) return;
+  loadInProgress = true;
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  setStatus('Loading...', true);
+  document.getElementById('errorBox').innerHTML = '';
+  try {
+    if(legacyServer){ await legacyLoad(force); return; }
+    if(force){
+      // On a current server this only starts a background refresh. An older server.py does the whole
+      // pull before replying, and its reply IS the data - so use it rather than pulling a second time.
+      const r = await apiJson('/api/refresh', { method: 'POST' });
+      if(r.error) throw new Error(r.error);
+      if(r.warehouse !== undefined){ legacyServer = true; applyData(r); showLegacyNotice(); return; }
+    }
+    let shownVersion = null;
+    let st = null;
+    for(let attempt = 0; attempt < 120; attempt++){
+      try { st = await apiJson('/api/status'); }
+      catch(e){
+        // The very first status request failing with a 404 means an older server.py with no /api/status.
+        if(attempt === 0 && e.notJson && e.status === 404){ legacyServer = true; await legacyLoad(false); return; }
+        throw e;
+      }
+      // Show data as soon as any exists (even while a newer copy is on its way), then again when it lands.
+      if(st.hasData && st.version !== shownVersion && (shownVersion === null || !st.refreshing)){
+        const json = await apiJson('/api/data');
+        if(json.error) throw new Error(json.error);
+        if(json.warehouse !== undefined){
+          applyData(json);
+          shownVersion = (json._server && json._server.version != null) ? json._server.version : st.version;
+        }
+      }
+      if(!st.refreshing){
+        if(st.lastError){
+          if(!st.hasData) throw new Error(st.lastError);
+          document.getElementById('errorBox').innerHTML +=
+            `<div class="error">The last refresh from Odoo failed (${escapeHtml(st.lastError)}). Showing the data from ${new Date(st.fetchedAt).toLocaleString()}.</div>`;
+        }
+        break;
+      }
+      setStatus(st.hasData ? 'Updating from Odoo...' : 'Loading from Odoo (the first load can take a minute)...', true);
+      await sleep(attempt < 3 ? 1000 : 3000);
+    }
+    if(st && st.refreshing) setStatus('Still updating - reload in a minute', true);
+  } catch(e) {
+    if(!/Signed out/.test(e.message)){
+      setStatus('Connection error', false);
+      const hint = e.notJson
+        ? ' If you recently updated dashboard.html, make sure server.py is the latest version too, then restart it.'
+        : ' Check that the server is running and the Odoo credentials are correct.';
+      showError(`Could not load data: ${escapeHtml(e.message.replace(/\.$/, ''))}.${hint}`);
+      if(!DATA) document.getElementById('deviceList').innerHTML = '';
+    }
+  } finally {
+    loadInProgress = false;
+    btn.disabled = false;
+  }
+}
+
+// ---------- Who's signed in ----------
+async function logout(){
+  try { await fetch('/logout', { method: 'POST' }); } catch(e) {}
+  goToLogin();
+}
+
+async function initSession(){
+  try {
+    const r = await fetch('/api/session');
+    if(r.status === 401){ goToLogin(); return; }
+    const s = await r.json();
+    if(s.authEnabled && s.user){
+      const box = document.getElementById('userBox');
+      box.textContent = '';
+      const who = document.createElement('span');
+      who.textContent = s.user;
+      const out = document.createElement('a');
+      out.href = '#';
+      out.textContent = 'Log out';
+      out.style.marginLeft = '8px';
+      out.onclick = function(e){ e.preventDefault(); logout(); };
+      box.append(who, out);
+      box.style.display = 'inline';
+    }
+  } catch(e) {}
+}
+
+function refresh(){ load(true); }
+
+let activeTab = 'forecast';
+let metricsCharts = {};
+let metricsWindow = '12mo';
+let orderAgeMode = 'units';  // 'units' = count tracked devices, 'orders' = count delivery orders
+
+function setOrderAgeMode(mode){
+  orderAgeMode = mode;
+  document.querySelectorAll('.age-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  renderMetrics();
+}
+
+const WINDOW_LABELS = { '1d': '1 day', '1w': '1 week', '1mo': '1 month', '3mo': '3 months', '6mo': '6 months', '12mo': '12 months' };
+
+function setMetricsWindow(key){
+  metricsWindow = key;
+  document.querySelectorAll('.window-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.window === key);
+  });
+  renderMetrics();
+}
+
+function switchTab(tab){
+  activeTab = tab;
+  document.getElementById('tab-forecast').style.display = tab === 'forecast' ? 'block' : 'none';
+  document.getElementById('tab-metrics').style.display = tab === 'metrics' ? 'block' : 'none';
+  document.getElementById('tab-orders').style.display = tab === 'orders' ? 'block' : 'none';
+  document.getElementById('tab-revenue').style.display = tab === 'revenue' ? 'block' : 'none';
+  document.getElementById('tab-shipments').style.display = tab === 'shipments' ? 'block' : 'none';
+  document.getElementById('tabBtn-forecast').classList.toggle('active', tab === 'forecast');
+  document.getElementById('tabBtn-metrics').classList.toggle('active', tab === 'metrics');
+  document.getElementById('tabBtn-orders').classList.toggle('active', tab === 'orders');
+  document.getElementById('tabBtn-revenue').classList.toggle('active', tab === 'revenue');
+  document.getElementById('tabBtn-shipments').classList.toggle('active', tab === 'shipments');
+  const titles = { forecast: 'Demand Outlook', metrics: 'Key Metrics', orders: 'Active Confirmed Orders', revenue: 'Revenue Calculator', shipments: 'Warehouse Shipments' };
+  document.getElementById('pageTitle').textContent = titles[tab];
+  // One plain sentence saying what this tab is for.
+  const leads = {
+    forecast: 'What customers are likely to order over the next few months, based on past sales.',
+    orders: 'Deliveries that are ready to ship right now, and what is on them.',
+    metrics: 'How fast we ship, how much stock we hold, and how much to order.',
+    revenue: 'Estimate yearly revenue from the devices we delivered to customers.',
+    shipments: 'How many devices left the warehouse, and where they went.'
+  };
+  document.getElementById('pageLead').textContent = leads[tab];
+  if(tab === 'metrics' && DATA){
+    // charts need their canvas visible before Chart.js can size them correctly
+    requestAnimationFrame(() => renderMetrics());
+  }
+  if(tab === 'orders' && DATA){
+    renderOrders();
+  }
+  if(tab === 'revenue' && DATA){
+    renderBillingConfigTable();
+  }
+}
+
+function renderOrders(){
+  if(!DATA) return;
+  const skus = Object.keys(DATA.inventory);
+
+  const totalConfirmedQty = skus.reduce((s, sku) => s + DATA.inventory[sku].outgoingConfirmed, 0);
+  // Distinct delivery orders across all devices, not a sum of per-device counts - a single
+  // order shipping two tracked devices together would otherwise be counted twice.
+  const distinctPickings = new Set();
+  skus.forEach(sku => {
+    (DATA.inventory[sku].confirmedOrders || []).forEach(o => distinctPickings.add(o.picking));
+  });
+  document.getElementById('ordersTotalsRow').innerHTML = `
+    <div class="kpi"><p>Total outgoing confirmed (all devices)</p><p>${totalConfirmedQty.toLocaleString()}</p></div>
+    <div class="kpi"><p>Total distinct orders</p><p>${distinctPickings.size.toLocaleString()}</p></div>
+  `;
+
+  document.getElementById('ordersList').innerHTML = skus.map(sku => {
+    const inv = DATA.inventory[sku];
+    const orders = inv.confirmedOrders || [];
+    const rows = orders.map(o => `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 8px 6px 0;font-family:var(--font-mono);">${o.picking}</td>
+        <td style="padding:6px 8px;">${o.client}</td>
+        <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--font-mono);">${o.qty.toLocaleString()}</td>
+      </tr>
+    `).join('');
+    return `
+    <div class="device">
+      <div class="device-row" onclick="toggleOrderDetail('${sku}')">
+        <div class="name"><p>${inv.name}</p><p>${sku}</p></div>
+        <div class="col"><p>Outgoing confirmed</p><p>${inv.outgoingConfirmed.toLocaleString()}</p></div>
+        <div class="col"><p>Orders</p><p>${orders.length.toLocaleString()}</p></div>
+        <span class="chev" id="orderChev-${sku}">&#9662;</span>
+      </div>
+      <div class="detail" id="orderDetail-${sku}">
+        ${orders.length === 0 ? `<p style="font-size:15px;color:var(--text-muted);padding:12px 0;">No active confirmed orders for this device right now.</p>` : `
+          <table style="width:100%;border-collapse:collapse;font-size:15px;margin-top:8px;">
+            <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+              <th style="font-weight:400;padding:6px 8px 6px 0;">Delivery order</th>
+              <th style="font-weight:400;padding:6px 8px;">Client</th>
+              <th style="font-weight:400;padding:6px 0 6px 8px;text-align:right;">Qty</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleOrderDetail(sku){
+  const el = document.getElementById('orderDetail-'+sku);
+  const chev = document.getElementById('orderChev-'+sku);
+  const opening = el.style.display !== 'block';
+  el.style.display = opening ? 'block' : 'none';
+  chev.style.transform = opening ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// ---------- Revenue Calculator ----------
+const BILLING_CONFIG_KEY = 'revenueBillingConfig';
+
+function loadBillingConfig(){
+  try {
+    const raw = localStorage.getItem(BILLING_CONFIG_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) {
+    return {};
+  }
+}
+
+function saveBillingConfig(config){
+  try {
+    localStorage.setItem(BILLING_CONFIG_KEY, JSON.stringify(config));
+  } catch(e) {
+    // localStorage unavailable (private browsing, etc.) - config just won't persist between visits
+  }
+}
+
+function getAnnualFee(config, sku){
+  const cfg = config[sku];
+  if(cfg == null) return 0;
+  // Migrates the earlier two-field {oneTime, recurring} shape: whatever was entered
+  // under "one-time price" was actually meant as the annual fee, so prefer that if
+  // recurring was never set.
+  if(typeof cfg === 'object') return cfg.recurring || cfg.oneTime || 0;
+  return cfg;
+}
+
+function updateBillingValue(sku, value){
+  const config = loadBillingConfig();
+  config[sku] = parseFloat(value) || 0;
+  saveBillingConfig(config);
+}
+
+// Extra billable SKUs: products with a price in the billing structure that aren't part
+// of the live-tracked device list (no Odoo on-hand/forecast data) - just a code, an
+// optional display name, and a fee, so they can still be matched and billed against an
+// uploaded orders spreadsheet. Persisted separately from the fee values themselves.
+const EXTRA_SKUS_KEY = 'revenueExtraSkus';
+
+function loadExtraSkus(){
+  try {
+    const raw = localStorage.getItem(EXTRA_SKUS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveExtraSkus(list){
+  try {
+    localStorage.setItem(EXTRA_SKUS_KEY, JSON.stringify(list));
+  } catch(e) {
+    // localStorage unavailable - extras just won't persist between visits
+  }
+}
+
+function addExtraSku(){
+  const skuInput = document.getElementById('extraSkuInput');
+  const nameInput = document.getElementById('extraSkuNameInput');
+  const errorEl = document.getElementById('extraSkuError');
+  const sku = skuInput.value.trim();
+  const name = nameInput.value.trim();
+  errorEl.textContent = '';
+
+  if(!sku){
+    errorEl.textContent = 'Enter a product code first.';
+    return;
+  }
+  const trackedSkus = DATA ? Object.keys(DATA.inventory) : [];
+  const allExisting = trackedSkus.concat(loadExtraSkus().map(e => e.sku));
+  if(allExisting.some(s => s.toLowerCase() === sku.toLowerCase())){
+    errorEl.textContent = `"${sku}" is already in the billing structure.`;
+    return;
+  }
+
+  const extras = loadExtraSkus();
+  extras.push({ sku, name: name || sku });
+  saveExtraSkus(extras);
+  skuInput.value = '';
+  nameInput.value = '';
+  renderBillingConfigTable();
+}
+
+function removeExtraSku(sku){
+  const extras = loadExtraSkus().filter(e => e.sku !== sku);
+  saveExtraSkus(extras);
+  // clean up its fee too, so a re-added SKU with the same code starts fresh rather than
+  // silently inheriting a stale price from before it was removed
+  const config = loadBillingConfig();
+  delete config[sku];
+  saveBillingConfig(config);
+  renderBillingConfigTable();
+}
+
+// Combined map of every billable SKU (tracked devices + manually-added extras), used both
+// for rendering the billing table and for matching uploaded spreadsheet lines.
+function getBillableSkuMap(){
+  const map = {};
+  if(DATA){
+    Object.keys(DATA.inventory).forEach(sku => {
+      map[sku] = { sku, name: DATA.inventory[sku].name, isExtra: false };
+    });
+  }
+  loadExtraSkus().forEach(e => {
+    map[e.sku] = { sku: e.sku, name: e.name, isExtra: true };
+  });
+  return map;
+}
+
+function renderBillingConfigTable(){
+  if(!DATA) return;
+  const config = loadBillingConfig();
+  const billable = getBillableSkuMap();
+  const skus = Object.keys(billable).sort();
+  document.getElementById('billingConfigTable').innerHTML = skus.map(sku => {
+    const entry = billable[sku];
+    const fee = getAnnualFee(config, sku);
+    return `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 8px 6px 0;">
+          <div style="font-weight:500;">${entry.name}${entry.isExtra ? ' <span style="font-size:13px;color:var(--text-muted);font-weight:400;">(added)</span>' : ''}</div>
+          <div style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);">${sku}</div>
+        </td>
+        <td style="padding:6px 8px;">
+          <input type="number" min="0" step="0.01" value="${fee}" style="width:110px;"
+            onchange="updateBillingValue('${sku}',this.value)">
+        </td>
+        <td style="padding:6px 0 6px 8px;">
+          ${entry.isExtra ? `<button onclick="removeExtraSku('${sku}')" style="font-size:13px;padding:4px 8px;">Remove</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+let lastUploadedRevenueRows = null;
+
+function onExcludeSparesChange(){
+  const on = document.getElementById('excludeSparesCheckbox').checked;
+  try { localStorage.setItem('revenueExcludeSpares', on ? '1' : '0'); } catch(e) {}
+  reprocessRevenueIfLoaded();
+}
+
+function reprocessRevenueIfLoaded(){
+  if(!lastUploadedRevenueRows) return;
+  const statusEl = document.getElementById('revenueFileStatus');
+  processRevenueRows(lastUploadedRevenueRows, statusEl);
+}
+
+function handleRevenueFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('revenueFileStatus');
+  statusEl.textContent = 'Reading file...';
+  statusEl.style.color = 'var(--text-muted)';
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      lastUploadedRevenueRows = rows;
+      processRevenueRows(rows, statusEl);
+    } catch(err) {
+      statusEl.textContent = `Could not read this file: ${err.message}`;
+      statusEl.style.color = 'var(--danger-text)';
+      document.getElementById('revenueResults').style.display = 'none';
+    }
+  };
+  reader.onerror = function(){
+    statusEl.textContent = 'Could not read this file - try again.';
+    statusEl.style.color = 'var(--danger-text)';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findColumnIndex(headerRow, candidates){
+  const normalized = headerRow.map(h => String(h).toLowerCase().trim());
+  for(const candidate of candidates){
+    const idx = normalized.findIndex(h => h === candidate);
+    if(idx !== -1) return idx;
+  }
+  // fall back to partial match if no exact header match found
+  for(const candidate of candidates){
+    const idx = normalized.findIndex(h => h.includes(candidate));
+    if(idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function extractSkuFromCell(cellValue){
+  // Odoo exports often show "[SKU] Product Name" in one cell - pull just the SKU out.
+  // Matches any characters up to the closing bracket, not just letters/digits/hyphens -
+  // real SKUs can contain spaces ("SC1800HT-S3JS V2") and slashes ("SC1800HT-W3/2JS").
+  const str = String(cellValue).trim();
+  const bracketMatch = str.match(/^\[([^\]]+)\]/);
+  return bracketMatch ? bracketMatch[1].trim() : str;
+}
+
+function processRevenueRows(rows, statusEl){
+  if(!rows || rows.length < 2){
+    statusEl.textContent = 'This file appears to be empty or has no data rows.';
+    statusEl.style.color = 'var(--danger-text)';
+    document.getElementById('revenueResults').style.display = 'none';
+    return;
+  }
+
+  const headerRow = rows[0];
+  // "Stock Moves/Product" and "Stock Moves/Quantity" come first: Odoo's grouped Transfer
+  // export (one row per line item, with picking-level fields like "Reference" only filled
+  // on each group's first row) uses these exact names, and they must be checked before the
+  // generic "reference"/"quantity" candidates - otherwise a plain "Reference" column (the
+  // picking's own name, e.g. "WH/OUT/06602") would be mistaken for the product column.
+  const skuColIdx = findColumnIndex(headerRow, [
+    'stock moves/product', 'internal reference', 'sku', 'product variant', 'product code', 'reference', 'product'
+  ]);
+  const qtyColIdx = findColumnIndex(headerRow, [
+    'stock moves/quantity', 'qty delivered', 'quantity delivered', 'delivered', 'qty', 'quantity'
+  ]);
+  const statusColIdx = findColumnIndex(headerRow, ['status']);
+  // Revenue is for devices delivered to CUSTOMERS. When the file says where each line went, lines going
+  // anywhere else (internal transfers, returns to vendors...) are skipped and reported, not counted.
+  const dstColIdx = findExactColumn(headerRow, ['destination location']);
+  const track = makeHeaderTracker(headerRow, { dst: dstColIdx });
+  const skippedElsewhere = { lines: 0, units: 0, deviceUnits: 0, byDest: {} };
+  // The quantity ORDERED/demanded on each line lets us spot spares: units shipped beyond it.
+  // (Delivery exports call it "Stock Moves/Demand"; the sales report calls it "Qty Ordered".)
+  const demandColIdx = findColumnIndex(headerRow, ['stock moves/demand', 'demand', 'qty ordered', 'quantity ordered', 'ordered']);
+  const excludeSpares = document.getElementById('excludeSparesCheckbox').checked;
+  // An explicit spare column (e.g. "Stock move/Spare Quantity") is the source of truth when the export
+  // has one: spares are exactly what the business recorded. Only when there isn't one do we infer spares
+  // as units shipped beyond the ordered quantity, which can wrongly flag legitimate extra units.
+  const spareColIdx = findColumnIndex(headerRow, ['stock move/spare quantity', 'stock moves/spare quantity', 'spare quantity', 'spares', 'spare']);
+  const hasSpareColumn = spareColIdx !== -1 && spareColIdx !== qtyColIdx && spareColIdx !== skuColIdx;
+  const sparesDetectable = hasSpareColumn || (demandColIdx !== -1 && demandColIdx !== qtyColIdx);
+
+  if(skuColIdx === -1 || qtyColIdx === -1){
+    statusEl.innerHTML = `Could not find both a product and a quantity column. Headers found: ` +
+      `<span style="font-family:var(--font-mono);">${headerRow.join(', ')}</span>. ` +
+      `Expecting something like "Internal Reference", "SKU", or "Stock Moves/Product", and "Qty Delivered", ` +
+      `"Quantity", or "Stock Moves/Quantity".`;
+    statusEl.style.color = 'var(--danger-text)';
+    document.getElementById('revenueResults').style.display = 'none';
+    return;
+  }
+
+  const billableSkus = Object.keys(getBillableSkuMap());
+  const trackedSkusLower = {};
+  billableSkus.forEach(s => { trackedSkusLower[s.toLowerCase()] = s; });
+
+  const includeNonDone = document.getElementById('includeNonDoneCheckbox').checked;
+
+  const deviceCounts = {};
+  const accessoryCounts = {};
+  const spares = { active: excludeSpares && sparesDetectable, noColumn: excludeSpares && !sparesDetectable, source: hasSpareColumn ? 'column' : 'demand', device: {}, accessory: {} };
+  let rowsProcessed = 0;
+  let rowsSkippedNotDone = 0;
+  let lastStatus = null;  // forward-fill: grouped exports leave this blank on continuation rows
+
+  for(let i = 1; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || row.length === 0) continue;
+    const hdr = track(row);   // keeps the current transfer's destination, even for rows skipped below
+
+    if(statusColIdx !== -1 && !includeNonDone){
+      const rawStatus = row[statusColIdx];
+      if(rawStatus !== '' && rawStatus != null) lastStatus = String(rawStatus).trim();
+      if(lastStatus && lastStatus.toLowerCase() !== 'done'){
+        rowsSkippedNotDone++;
+        continue;
+      }
+    }
+
+    const rawSku = row[skuColIdx];
+    const rawQty = row[qtyColIdx];
+    if(rawSku === '' || rawSku == null) continue;
+    const qty = parseFloat(rawQty) || 0;
+    if(qty === 0) continue;
+
+    if(dstColIdx !== -1 && hdr.dst && !/customer/i.test(hdr.dst)){
+      skippedElsewhere.lines++;
+      skippedElsewhere.units += qty;
+      if(trackedSkusLower[extractSkuFromCell(rawSku).toLowerCase()]) skippedElsewhere.deviceUnits += qty;
+      skippedElsewhere.byDest[hdr.dst] = (skippedElsewhere.byDest[hdr.dst] || 0) + qty;
+      continue;
+    }
+
+    // Spares: anything shipped beyond the ordered quantity is not counted. A line with no
+    // usable ordered quantity is left alone rather than treated as "all spare".
+    let counted = qty, spare = 0;
+    if(spares.active && hasSpareColumn){
+      // Shipped quantity includes the spares (shipped = ordered + spare), so remove exactly what's recorded.
+      const rawSpare = parseFloat(row[spareColIdx]);
+      if(!isNaN(rawSpare) && rawSpare > 0){
+        spare = Math.min(qty, rawSpare);
+        counted = qty - spare;
+      }
+    } else if(spares.active){
+      const rawDemand = row[demandColIdx];
+      if(rawDemand !== '' && rawDemand != null && !isNaN(parseFloat(rawDemand))){
+        counted = Math.min(qty, Math.max(0, parseFloat(rawDemand)));
+        spare = qty - counted;
+      }
+    }
+
+    const extracted = extractSkuFromCell(rawSku);
+    const matched = trackedSkusLower[extracted.toLowerCase()];
+    rowsProcessed++;
+    if(matched){
+      deviceCounts[matched] = (deviceCounts[matched] || 0) + counted;
+      if(spare > 0) spares.device[matched] = (spares.device[matched] || 0) + spare;
+    } else {
+      accessoryCounts[extracted] = (accessoryCounts[extracted] || 0) + counted;
+      if(spare > 0) spares.accessory[extracted] = (spares.accessory[extracted] || 0) + spare;
+    }
+  }
+
+  if(rowsProcessed === 0){
+    statusEl.textContent = skippedElsewhere.lines > 0 && rowsSkippedNotDone === 0
+      ? `Found the right columns, but none of the ${skippedElsewhere.lines} line(s) go to a customer location, so nothing was counted. Use the Warehouse Shipments tab for transfers that aren't customer deliveries.`
+      : rowsSkippedNotDone > 0
+      ? `Found the right columns, but every line was excluded as not "Done" status (${rowsSkippedNotDone} skipped).`
+      : 'Found the right columns, but no usable data rows (check that quantity values are numeric).';
+    statusEl.style.color = 'var(--danger-text)';
+    document.getElementById('revenueResults').style.display = 'none';
+    return;
+  }
+
+  const billableMap = getBillableSkuMap();
+  const addedUnits = Object.keys(deviceCounts).reduce((s, sku) => s + ((billableMap[sku] && billableMap[sku].isExtra) ? deviceCounts[sku] : 0), 0);
+  const statusMsg = `Read ${rowsProcessed.toLocaleString()} line(s): ${Object.keys(deviceCounts).length} device type(s) and ${Object.keys(accessoryCounts).length} other item type(s).` +
+    (rowsSkippedNotDone > 0 ? ` (${rowsSkippedNotDone.toLocaleString()} line(s) excluded as not yet "Done".)` : '') +
+    (includeNonDone && statusColIdx !== -1 ? ` Includes orders regardless of status - revenue may include undelivered orders.` : '') +
+    (spares.active ? ` Spares not counted: ${(Object.values(spares.device).concat(Object.values(spares.accessory))).reduce((s, v) => s + v, 0).toLocaleString()} unit(s) ${spares.source === 'column' ? "(from the file's Spare Quantity column)" : '(shipped beyond the quantity ordered)'}.` : '') +
+    (skippedElsewhere.lines > 0 ? ` Counted only deliveries to customers: skipped ${skippedElsewhere.lines.toLocaleString()} line(s) (${skippedElsewhere.units.toLocaleString()} units, ${skippedElsewhere.deviceUnits.toLocaleString()} of them tracked devices) going elsewhere - ${Object.entries(skippedElsewhere.byDest).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([d, u]) => d + ' (' + u.toLocaleString() + ')').join(', ')}. They are on the Warehouse Shipments tab.` : '') +
+    (addedUnits > 0 ? ` Includes ${addedUnits.toLocaleString()} unit(s) of products you added in the billing table (not on the tracked device list).` : '') +
+    (spares.noColumn ? ` Couldn't find an ordered/demand quantity column, so spares were NOT excluded.` : '');
+  showStatusLines(statusEl, statusMsg);
+  statusEl.style.color = 'var(--success-text)';
+
+  renderRevenueResults(deviceCounts, accessoryCounts, spares);
+}
+
+// ---------- Shared helpers for transfer exports ----------
+// Exact-name column lookup (no partial matching) - used for Source/Destination Location, where a
+// partial match could pick up the wrong column (e.g. "Source Document").
+function findExactColumn(headerRow, names){
+  const normalized = headerRow.map(h => String(h).toLowerCase().trim());
+  for(const n of names){
+    const i = normalized.indexOf(n);
+    if(i !== -1) return i;
+  }
+  return -1;
+}
+
+// Transfer exports put transfer-level fields (status, source, destination) only on the FIRST row of
+// each transfer, so the lines below it are blank. This remembers the current transfer's values. A new
+// transfer (a row with a Reference) starts fresh, so a blank there is never mistaken for the previous
+// transfer's value.
+function makeHeaderTracker(headerRow, cols){
+  const refIdx = findExactColumn(headerRow, ['reference']);
+  const cur = { ref: null };
+  return function(row){
+    const isNew = refIdx !== -1 && row[refIdx] !== '' && row[refIdx] != null;
+    if(isNew) cur.ref = String(row[refIdx]).trim();
+    Object.keys(cols).forEach(key => {
+      const idx = cols[key];
+      if(idx === -1) return;
+      const v = row[idx];
+      if(v !== '' && v != null) cur[key] = String(v).trim();
+      else if(isNew) cur[key] = null;
+    });
+    return cur;
+  };
+}
+
+// ---------- Warehouse Shipments ----------
+// What physically left the warehouse, by where it went. Separate from the Revenue Calculator: revenue is
+// about deliveries to customers; this is every unit leaving the warehouse's stock for any reason.
+function handleShipmentsFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('shipFileStatus');
+  statusEl.textContent = 'Reading file...';
+  statusEl.style.color = 'var(--text-muted)';
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+      processShipmentRows(rows, statusEl);
+    } catch(err) {
+      statusEl.textContent = `Could not read this file: ${err.message}`;
+      statusEl.style.color = 'var(--danger-text)';
+      document.getElementById('shipResults').style.display = 'none';
+    }
+  };
+  reader.onerror = function(){
+    statusEl.textContent = 'Could not read this file - try again.';
+    statusEl.style.color = 'var(--danger-text)';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processShipmentRows(rows, statusEl){
+  const results = document.getElementById('shipResults');
+  const fail = msg => { statusEl.innerHTML = msg; statusEl.style.color = 'var(--danger-text)'; results.style.display = 'none'; };
+  if(!rows || rows.length < 2) return fail('This file appears to be empty or has no data rows.');
+
+  const headerRow = rows[0];
+  const skuColIdx = findColumnIndex(headerRow, ['stock moves/product', 'internal reference', 'sku', 'product variant', 'product code', 'reference', 'product']);
+  const qtyColIdx = findColumnIndex(headerRow, ['stock moves/quantity', 'qty delivered', 'quantity delivered', 'delivered', 'qty', 'quantity']);
+  if(skuColIdx === -1 || qtyColIdx === -1){
+    return fail(`Could not find both a product and a quantity column. Headers found: <span style="font-family:var(--font-mono);">${escapeHtml(headerRow.join(', '))}</span>.`);
+  }
+  const statusColIdx = findExactColumn(headerRow, ['status']);
+  const srcColIdx = findExactColumn(headerRow, ['source location']);
+  const dstColIdx = findExactColumn(headerRow, ['destination location']);
+  const spareIdx = findColumnIndex(headerRow, ['stock move/spare quantity', 'stock moves/spare quantity', 'spare quantity', 'spares', 'spare']);
+  const hasSpareColumn = spareIdx !== -1 && spareIdx !== qtyColIdx && spareIdx !== skuColIdx;
+  const track = makeHeaderTracker(headerRow, { status: statusColIdx, src: srcColIdx, dst: dstColIdx });
+
+  // "Inside the warehouse" = a location under the warehouse's own code (WH, WH/Stock, WH/Stock/Pre-Production ...)
+  const whCode = ((DATA && DATA.warehouse_code) || 'WH').toLowerCase();
+  const insideWh = loc => !!loc && (loc.toLowerCase() === whCode || loc.toLowerCase().startsWith(whCode + '/'));
+  const billable = getBillableSkuMap();
+  const lower = {};
+  Object.keys(billable).forEach(s => { lower[s.toLowerCase()] = s; });
+
+  const byDest = {};      // destination -> { cat, device, added, other }
+  const devices = {};     // sku -> { out, customers, vendors, other, unknown, spares }
+  const otherItems = {};  // item -> units shipped out
+  const totals = { device: 0, added: 0, other: 0, spares: 0 };
+  const inside = { device: 0, added: 0, other: 0 };
+  const skipped = { notDone: 0, lines: 0, units: 0, bySrc: {} };
+  const transfers = new Set();
+  let linesCounted = 0;
+
+  for(let i = 1; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || row.length === 0) continue;
+    const hdr = track(row);
+    if(statusColIdx !== -1 && hdr.status && hdr.status.toLowerCase() !== 'done'){ skipped.notDone++; continue; }
+    const rawSku = row[skuColIdx];
+    if(rawSku === '' || rawSku == null) continue;
+    const qty = parseFloat(row[qtyColIdx]) || 0;
+    if(qty === 0) continue;
+    // Only what left THIS warehouse: lines shipped from somewhere else (e.g. HO/Stock) are skipped.
+    if(srcColIdx !== -1 && hdr.src && !insideWh(hdr.src)){
+      skipped.lines++; skipped.units += qty;
+      skipped.bySrc[hdr.src] = (skipped.bySrc[hdr.src] || 0) + qty;
+      continue;
+    }
+    const code = extractSkuFromCell(rawSku);
+    const matched = lower[code.toLowerCase()];
+    const group = matched ? (billable[matched].isExtra ? 'added' : 'device') : 'other';
+    const dst = hdr.dst || '';
+    let cat;
+    if(dstColIdx === -1 || !dst) cat = 'unknown';
+    else if(/customer/i.test(dst)) cat = 'customers';
+    else if(/vendor|supplier/i.test(dst)) cat = 'vendors';
+    else if(insideWh(dst)) cat = 'within';
+    else cat = 'other';
+
+    linesCounted++;
+    if(hdr.ref) transfers.add(hdr.ref);
+    const key = dst || '(not specified)';
+    const dRow = byDest[key] = byDest[key] || { cat, device: 0, added: 0, other: 0 };
+    dRow[group] += qty;
+    if(cat === 'within'){ inside[group] += qty; continue; }   // stays in the warehouse: shown, not counted
+
+    totals[group] += qty;
+    if(group === 'other'){ otherItems[code] = (otherItems[code] || 0) + qty; continue; }
+    const dv = devices[matched] = devices[matched] || { out: 0, customers: 0, vendors: 0, other: 0, unknown: 0, spares: 0 };
+    dv.out += qty;
+    dv[cat] += qty;
+    if(hasSpareColumn){
+      const sp = parseFloat(row[spareIdx]);
+      if(!isNaN(sp) && sp > 0){ const s = Math.min(qty, sp); dv.spares += s; totals.spares += s; }
+    }
+  }
+
+  if(linesCounted === 0){
+    return fail(skipped.lines > 0
+      ? `Found the right columns, but every line was shipped from somewhere other than this warehouse (${skipped.lines} skipped).`
+      : 'Found the right columns, but no usable lines (check that the status is Done and the quantities are numeric).');
+  }
+
+  let msg = `Counted ${linesCounted.toLocaleString()} line(s) from ${transfers.size.toLocaleString()} transfer(s).`;
+  if(skipped.notDone) msg += ` ${skipped.notDone.toLocaleString()} line(s) skipped because they aren't Done.`;
+  if(skipped.lines) msg += ` Skipped ${skipped.lines.toLocaleString()} line(s) (${skipped.units.toLocaleString()} units) shipped from other locations, not this warehouse - ${Object.entries(skipped.bySrc).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s, u]) => s + ' (' + u.toLocaleString() + ')').join(', ')}.`;
+  if(srcColIdx === -1) msg += ' No Source Location column found, so every line was assumed to leave this warehouse.';
+  if(dstColIdx === -1) msg += ' No Destination Location column found, so destinations are not broken down and nothing is treated as staying inside the warehouse.';
+  showStatusLines(statusEl, msg);
+  statusEl.style.color = 'var(--success-text)';
+
+  renderShipmentResults({ byDest, devices, otherItems, totals, inside, hasSpareColumn, hasExtras: totals.added > 0 || loadExtraSkus().length > 0, hasUnknown: Object.values(devices).some(d => d.unknown > 0) });
+}
+
+function renderShipmentResults(r){
+  const n = v => Number(v).toLocaleString();
+  const th = (t, left) => `<th style="font-weight:400;padding:6px 8px;text-align:${left ? 'left' : 'right'};">${t}</th>`;
+  const td = (v, extra) => `<td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);${extra || ''}">${v}</td>`;
+  const CAT = { customers: 'Customers', vendors: 'Vendors (returns)', other: 'Other company location', within: 'Inside the warehouse (not counted)', unknown: 'Not specified' };
+  const hd = '<tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);">';
+
+  document.getElementById('shipKpiRow').innerHTML = `
+    <div class="kpi"><p>Devices shipped out</p><p>${n(r.totals.device)}</p></div>
+    ${r.hasExtras ? `<div class="kpi"><p>Added products shipped out</p><p>${n(r.totals.added)}</p></div>` : ''}
+    <div class="kpi"><p>Other items shipped out</p><p>${n(r.totals.other)}</p></div>
+    <div class="kpi"><p>Devices moved inside the warehouse (not counted)</p><p>${n(r.inside.device + r.inside.added)}</p></div>
+    ${r.hasSpareColumn ? `<div class="kpi"><p>Of the devices, recorded as spares</p><p>${n(r.totals.spares)}</p></div>` : ''}
+  `;
+
+  // Where it went
+  const dests = Object.entries(r.byDest).sort((a, b) => (a[1].cat === 'within') - (b[1].cat === 'within') || (b[1].device + b[1].added + b[1].other) - (a[1].device + a[1].added + a[1].other));
+  document.getElementById('shipByDestTable').innerHTML = `
+    <thead>${hd}${th('Destination', true)}${th('Where', true)}${th('Devices')}${r.hasExtras ? th('Added products') : ''}${th('Other items')}</tr></thead>
+    <tbody>${dests.map(([dst, v]) => `
+      <tr style="border-bottom:1px solid var(--border);${v.cat === 'within' ? 'color:var(--text-muted);' : ''}">
+        <td style="padding:6px 8px;">${escapeHtml(dst)}</td>
+        <td style="padding:6px 8px;font-size:15px;">${CAT[v.cat]}</td>
+        ${td(n(v.device))}${r.hasExtras ? td(n(v.added)) : ''}${td(n(v.other))}
+      </tr>`).join('')}</tbody>`;
+
+  // By device (devices + added products that left the warehouse)
+  const rowsD = Object.entries(r.devices).sort((a, b) => b[1].out - a[1].out);
+  const billable = getBillableSkuMap();
+  const sum = k => rowsD.reduce((s, [, v]) => s + v[k], 0);
+  document.getElementById('shipByDeviceTable').innerHTML = rowsD.length === 0
+    ? '<tbody><tr><td style="padding:8px 0;color:var(--text-muted);">No devices left the warehouse in this file.</td></tr></tbody>'
+    : `<thead>${hd}${th('Device', true)}${th('Shipped out')}${th('To customers')}${th('To other company locations')}${th('To vendors')}${r.hasUnknown ? th('Not specified') : ''}${r.hasSpareColumn ? th('Of which spares') : ''}</tr></thead>
+    <tbody>${rowsD.map(([sku, v]) => `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 8px;">${escapeHtml(billable[sku] ? billable[sku].name : sku)} <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:13px;">(${escapeHtml(sku)})</span></td>
+        ${td(n(v.out), 'font-weight:600;')}${td(v.customers ? n(v.customers) : '-')}${td(v.other ? n(v.other) : '-')}${td(v.vendors ? n(v.vendors) : '-')}${r.hasUnknown ? td(v.unknown ? n(v.unknown) : '-') : ''}${r.hasSpareColumn ? td(v.spares ? n(v.spares) : '-', 'color:var(--text-muted);') : ''}
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--border);font-weight:600;">
+        <td style="padding:6px 8px;">Total</td>${td(n(sum('out')))}${td(n(sum('customers')))}${td(n(sum('other')))}${td(n(sum('vendors')))}${r.hasUnknown ? td(n(sum('unknown'))) : ''}${r.hasSpareColumn ? td(n(sum('spares'))) : ''}
+      </tr></tbody>`;
+
+  // Everything else
+  const others = Object.entries(r.otherItems).sort((a, b) => b[1] - a[1]);
+  document.getElementById('shipOtherTable').innerHTML = others.length === 0
+    ? '<tbody><tr><td style="padding:8px 0;color:var(--text-muted);">No other items left the warehouse in this file.</td></tr></tbody>'
+    : `<thead>${hd}${th('Item', true)}${th('Shipped out')}</tr></thead>
+    <tbody>${others.map(([code, q]) => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;">${escapeHtml(code)}</td>${td(n(q))}</tr>`).join('')}
+      <tr style="border-top:2px solid var(--border);font-weight:600;"><td style="padding:6px 8px;">Total</td>${td(n(r.totals.other))}</tr></tbody>`;
+
+  document.getElementById('shipResults').style.display = 'block';
+}
+
+// Shows a processing summary as short separate lines instead of one long paragraph.
+function showStatusLines(el, msg){
+  const parts = String(msg).replace(/([.!?])\s+(?=[A-Z(])/g, '$1\n').split('\n').filter(Boolean);
+  el.innerHTML = parts.map(p => `<span class="status-item">${escapeHtml(p)}</span> `).join('');
+}
+
+function renderRevenueResults(deviceCounts, accessoryCounts, spares){
+  spares = spares || { active: false, device: {}, accessory: {} };
+  const config = loadBillingConfig();
+  const billable = getBillableSkuMap();
+  const deviceSkus = Object.keys(deviceCounts).sort();
+
+  let totalDeviceUnits = 0, totalAccessoryUnits = 0;
+  let totalRevenue = 0;
+
+  const deviceRows = deviceSkus.map(sku => {
+    const qty = deviceCounts[sku];
+    const fee = getAnnualFee(config, sku);
+    const revenue = qty * fee;
+    totalDeviceUnits += qty;
+    totalRevenue += revenue;
+    const entry = billable[sku];
+    return { sku, name: entry ? entry.name : sku, qty, fee, revenue, spare: spares.device[sku] || 0 };
+  });
+
+  Object.values(accessoryCounts).forEach(qty => { totalAccessoryUnits += qty; });
+
+  const fmt = n => '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  document.getElementById('revenueKpiRow').innerHTML = `
+    <div class="kpi"><p>Total devices delivered</p><p>${totalDeviceUnits.toLocaleString()}</p></div>
+    <div class="kpi"><p>Other items delivered</p><p>${totalAccessoryUnits.toLocaleString()}</p></div>
+    ${spares.active ? `<div class="kpi"><p>Spare units not counted</p><p>${(Object.values(spares.device).concat(Object.values(spares.accessory))).reduce((s, v) => s + v, 0).toLocaleString()}</p></div>` : ''}
+    <div class="kpi"><p>Total annual revenue</p><p>${fmt(totalRevenue)}</p></div>
+  `;
+
+  document.getElementById('revenueByDeviceTable').innerHTML = `
+    <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+      <th style="font-weight:400;padding:6px 8px 6px 0;">Device</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">${spares.active ? 'Qty counted' : 'Qty delivered'}</th>
+      ${spares.active ? '<th style="font-weight:400;padding:6px 8px;text-align:right;" title="Units shipped beyond the quantity ordered, left out of the count">Spares not counted</th>' : ''}
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">Annual fee</th>
+      <th style="font-weight:400;padding:6px 0 6px 8px;text-align:right;">Annual revenue</th>
+    </tr></thead>
+    <tbody>
+      ${deviceRows.map(r => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 8px 6px 0;">${r.name} <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:13px;">(${r.sku})</span></td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${r.qty.toLocaleString()}</td>
+          ${spares.active ? `<td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);color:var(--text-muted);">${r.spare > 0 ? r.spare.toLocaleString() : '-'}</td>` : ''}
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${fmt(r.fee)}</td>
+          <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--font-mono);font-weight:500;">${fmt(r.revenue)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+
+  const accessorySkus = Object.keys(accessoryCounts).sort();
+  document.getElementById('revenueAccessoriesTable').innerHTML = `
+    <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+      <th style="font-weight:400;padding:6px 8px 6px 0;">Code / description</th>
+      <th style="font-weight:400;padding:6px ${spares.active ? '8px' : '0'} 6px 8px;text-align:right;">${spares.active ? 'Qty counted' : 'Qty'}</th>
+      ${spares.active ? '<th style="font-weight:400;padding:6px 0 6px 8px;text-align:right;">Spares not counted</th>' : ''}
+    </tr></thead>
+    <tbody>
+      ${accessorySkus.length === 0 ? `<tr><td colspan="${spares.active ? 3 : 2}" style="padding:8px 0;color:var(--text-muted);">None - every line matched a tracked device.</td></tr>` :
+        accessorySkus.map(code => `
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:6px 8px 6px 0;">${code}</td>
+            <td style="padding:6px ${spares.active ? '8px' : '0'} 6px 8px;text-align:right;font-family:var(--font-mono);">${accessoryCounts[code].toLocaleString()}</td>
+            ${spares.active ? `<td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--font-mono);color:var(--text-muted);">${(spares.accessory[code] || 0) > 0 ? spares.accessory[code].toLocaleString() : '-'}</td>` : ''}
+          </tr>
+        `).join('')}
+    </tbody>
+  `;
+
+  document.getElementById('revenueResults').style.display = 'block';
+}
+
+// ---------- Per-device adjustments (lead time and safety stock sliders) ----------
+// A device's lead time and safety stock normally follow Odoo (the vendor's lead time) and the defaults in
+// the PAR card. Moving a device's own slider overrides them for that device only. Saved in this browser.
+const PAR_OVERRIDES_KEY = 'parOverrides';
+let parOverrides = (() => {
+  try { const o = JSON.parse(localStorage.getItem(PAR_OVERRIDES_KEY) || '{}'); return o && typeof o === 'object' ? o : {}; }
+  catch(e) { return {}; }
+})();
+const saveParOverrides = () => { try { localStorage.setItem(PAR_OVERRIDES_KEY, JSON.stringify(parOverrides)); } catch(e) {} };
+function setParOverride(sku, kind, value){ (parOverrides[sku] = parOverrides[sku] || {})[kind] = value; saveParOverrides(); }
+function clearParOverride(sku, kind){
+  if(!parOverrides[sku]) return;
+  delete parOverrides[sku][kind];
+  if(!Object.keys(parOverrides[sku]).length) delete parOverrides[sku];
+  saveParOverrides();
+}
+function clearAllParOverrides(){ parOverrides = {}; saveParOverrides(); }
+
+// ---------- Vendor lead times ----------
+// One vendor from a product's list. "default" = the first vendor listed in Odoo that has a lead time
+// (Odoo's own default); or the slowest / fastest of those with a lead time.
+function pickVendor(list, policy){
+  const usable = (list || []).filter(v => v.leadDays > 0);
+  if(!usable.length) return null;
+  if(policy === 'slowest') return usable.reduce((a, b) => b.leadDays > a.leadDays ? b : a);
+  if(policy === 'fastest') return usable.reduce((a, b) => b.leadDays < a.leadDays ? b : a);
+  return usable[0];
+}
+
+// The vendor lead time (days) that Odoo implies for a device, before any adjustment by the user.
+//  - a device we build: the SLOWEST of its parts (every part has to be re-ordered, so the last to arrive
+//    sets the pace), and that part's vendor is the one reported;
+//  - a device we buy finished (no parts list): the device's own vendor;
+//  - otherwise: source 'default', and the default lead time from the PAR card applies.
+function deviceLeadTime(sku, comps, policy){
+  const V = DATA && DATA.vendors;
+  const base = { source: 'default', days: null, vendor: null, part: null, partsKnown: 0, partsTotal: 0 };
+  if(!V || V.error) return base;
+  const parts = (comps || []).filter(c => !c.missing);
+  base.partsTotal = parts.length;
+  const known = parts.map(c => ({ code: c.component, v: pickVendor((V.byComponent || {})[c.component], policy) })).filter(x => x.v);
+  base.partsKnown = known.length;
+  if(known.length){
+    const slowest = known.reduce((a, b) => b.v.leadDays > a.v.leadDays ? b : a);
+    return { ...base, source: 'parts', days: slowest.v.leadDays, vendor: slowest.v.vendor, part: slowest.code };
+  }
+  const own = pickVendor((V.byDevice || {})[sku], policy);
+  if(own) return { ...base, source: 'device', days: own.leadDays, vendor: own.vendor };
+  return base;
+}
+
+// "PAR by vendor": every device grouped under the vendor that sets its lead time.
+function renderVendorSummary(rows){
+  const card = document.getElementById('vendorCard');
+  const table = document.getElementById('vendorTable');
+  const V = DATA && DATA.vendors;
+  if(!card || !table) return;
+  if(!V || V.error){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const groups = {};
+  rows.filter(d => d.par > 0).forEach(d => {
+    const none = d.lead.source === 'default';
+    const key = none ? '\u0000none' : d.lead.vendor;
+    const g = groups[key] = groups[key] || { vendor: d.lead.vendor, none, days: [], devices: [], par: 0, order: 0 };
+    g.days.push(d.leadDays);
+    g.devices.push(d); g.par += d.par; g.order += d.orderNow;
+  });
+  const list = Object.values(groups).sort((a, b) => (a.none - b.none) || Math.max(...b.days) - Math.max(...a.days) || String(a.vendor).localeCompare(String(b.vendor)));
+  if(!list.length){ table.innerHTML = '<tbody><tr><td style="padding:8px 0;color:var(--text-muted);">No devices with a PAR yet.</td></tr></tbody>'; return; }
+  const th = (t, left) => `<th style="font-weight:400;padding:6px 8px;text-align:${left ? 'left' : 'right'};">${t}</th>`;
+  const td = (v, extra) => `<td style="padding:8px;text-align:right;font-family:var(--font-mono);${extra || ''}">${v}</td>`;
+  const range = g => { const lo = Math.min(...g.days), hi = Math.max(...g.days); return lo === hi ? `${lo} days` : `${lo}\u2013${hi} days`; };
+  table.innerHTML = `
+    <thead><tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);">${th('Vendor', true)}${th('Lead time')}${th('Devices', true)}${th('Total PAR')}${th('Units to order now')}</tr></thead>
+    <tbody>${list.map(g => `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px;font-weight:${g.none ? '400' : '600'};${g.none ? 'color:var(--text-muted);' : ''}">${g.none ? 'No vendor lead time in Odoo' : escapeHtml(g.vendor)}</td>
+        ${td(range(g) + (g.none && !g.devices.some(d => d.leadAdjusted) ? ' <span style="font-family:var(--font);color:var(--text-muted);">(default)</span>' : ''))}
+        <td style="padding:8px;">${g.devices.map(d => escapeHtml(d.name) + (d.lead.source === 'parts' ? ` <span style="color:var(--text-muted);font-size:13px;">via ${escapeHtml(d.lead.part)}</span>` : '') + (d.leadAdjusted ? ' <span class="slow-badge">adjusted</span>' : '')).join(', ')}</td>
+        ${td(g.par.toLocaleString())}${td(g.order > 0 ? g.order.toLocaleString() : '-', g.order > 0 ? 'font-weight:600;' : '')}
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--border);font-weight:600;">
+        <td style="padding:8px;">Total</td><td></td><td></td>${td(list.reduce((s, g) => s + g.par, 0).toLocaleString())}${td(list.reduce((s, g) => s + g.order, 0).toLocaleString())}
+      </tr></tbody>`;
+}
+
+// ---------- Worked examples ----------
+// Each "How is this calculated?" panel ends with an example using one real device from the data, so
+// the formula can be followed with numbers that match the table below it.
+const fmtN = n => Number(n).toLocaleString();
+
+function renderTurnsExample(rows){
+  const el = document.getElementById('turnsExample');
+  if(!el) return;
+  const d = rows.filter(r => r.shipped > 0 && r.turns != null && r.avgOnHand > 0).sort((a, b) => b.shipped - a.shipped)[0];
+  if(!d){ el.style.display = 'none'; return; }
+  const perDay = d.shipped / 365;
+  el.style.display = '';
+  el.innerHTML = `<b>Example &ndash; ${escapeHtml(d.name)}.</b> It shipped ${fmtN(d.shipped)} units and averaged ${fmtN(Math.round(d.avgOnHand))} on hand, so ` +
+    `turns = ${fmtN(d.shipped)} &divide; ${fmtN(Math.round(d.avgOnHand))} = <b>${d.turns.toFixed(2)}</b>. ` +
+    `It has ${fmtN(d.onHandNow)} on hand now and ships about ${perDay.toFixed(1)} a day, so days of cover = ${fmtN(d.onHandNow)} &divide; ${perDay.toFixed(1)} = <b>${fmtN(Math.round(d.onHandNow / perDay))} days</b>.`;
+}
+
+function renderParExample(rows, leadDefault){
+  const el = document.getElementById('parExample');
+  if(!el) return;
+  // A device whose PAR comes from the formula (not from Odoo). Prefer one you have not adjusted, with a
+  // vendor lead time, that actually needs an order, so the example shows the usual logic.
+  const adj = r => (r.leadAdjusted || r.safetyAdjusted) ? 1 : 0;
+  const d = rows.filter(r => r.parSource === 'est.' && r.shipped > 0)
+                .sort((a, b) => (adj(a) - adj(b)) || ((b.lead.source !== 'default') - (a.lead.source !== 'default')) || ((b.orderNow > 0) - (a.orderNow > 0)) || b.shipped - a.shipped)[0];
+  if(!d){ el.style.display = 'none'; return; }
+  const perDay = d.shipped / 365;
+  const raw = perDay * d.leadDays * (1 + d.safety);
+  const gap = d.par - d.position;
+  let leadLine;
+  if(d.leadAdjusted) leadLine = `You set it to <b>${d.leadDays} days</b>${d.lead.source === 'default' ? '' : ` (Odoo says ${d.lead.days})`}.`;
+  else if(d.lead.source === 'parts') leadLine = `Its slowest part is <b>${escapeHtml(d.lead.part)}</b> from ${escapeHtml(d.lead.vendor)}: <b>${d.lead.days} days</b>.`;
+  else if(d.lead.source === 'device') leadLine = `${escapeHtml(d.lead.vendor)} delivers it in <b>${d.lead.days} days</b>.`;
+  else leadLine = `Odoo has no vendor lead time for it, so the default of <b>${leadDefault} days</b> is used.`;
+  const safetyNote = d.safetyAdjusted ? ` (you set the safety stock to ${Math.round(d.safety * 100)}%)` : '';
+  el.style.display = '';
+  el.innerHTML = `<b>Example &ndash; ${escapeHtml(d.name)}.</b>` +
+    `<div class="ex-line"><b>Lead time:</b> ${leadLine}</div>` +
+    `<div class="ex-line"><b>PAR:</b> ${fmtN(d.shipped)} shipped &divide; 365 = ${perDay.toFixed(1)} a day. ${perDay.toFixed(1)} &times; ${d.leadDays} days &times; ${(1 + d.safety).toFixed(2)}${safetyNote} &asymp; ${fmtN(Math.round(raw))}, rounded to <b>${fmtN(d.par)}</b>.</div>` +
+    `<div class="ex-line"><b>Position:</b> ${fmtN(d.onHandNow)} &minus; ${fmtN(d.confirmed)} + ${fmtN(d.buildable)} + ${fmtN(d.incomingBuildable)} = <b>${fmtN(d.position)}</b>.</div>` +
+    `<div class="ex-line"><b>Order now:</b> ${fmtN(d.par)} &minus; ${fmtN(d.position)} = ${fmtN(gap)}` +
+    (d.orderNow > 0 ? `, rounded to <b>${fmtN(d.orderNow)}</b>.` : `, which is not above zero, so <b>no order is needed</b>.`) + `</div>`;
+}
+
+// Devices whose part-by-part breakdown is open in the PAR table (kept across re-renders, e.g. when
+// lead time or safety stock changes).
+const parExpanded = new Set();
+function toggleParDetail(sku){
+  const row = document.getElementById('parDetail-' + sku);
+  const chev = document.getElementById('parChev-' + sku);
+  if(!row) return;
+  const open = !parExpanded.has(sku);
+  if(open) parExpanded.add(sku); else parExpanded.delete(sku);
+  row.style.display = open ? 'table-row' : 'none';
+  if(chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function renderWarehouseTurns(){
+  const t = DATA.warehouse_turns;
+  const warnEl = document.getElementById('turnsWarning');
+  const kpiEl = document.getElementById('turnsKpiRow');
+  const tableEl = document.getElementById('turnsTable');
+  const parKpiEl = document.getElementById('parKpiRow');
+  const parTableEl = document.getElementById('parTable');
+  const parNoteEl = document.getElementById('parNote');
+  const parWarnEl = document.getElementById('parWarning');
+  warnEl.style.display = 'none';
+  parWarnEl.style.display = 'none';
+
+  if(!t || t.error){
+    kpiEl.innerHTML = ''; tableEl.innerHTML = '';
+    parKpiEl.innerHTML = ''; parTableEl.innerHTML = ''; parNoteEl.textContent = '';
+    warnEl.style.display = 'block';
+    warnEl.textContent = t && t.error
+      ? `Warehouse turns couldn't be calculated: ${t.error}`
+      : 'No warehouse turns data yet - restart server.py so the connector pulls it.';
+    return;
+  }
+
+  const warnings = [];
+  if(t.historyLooksFlat) warnings.push('Every month-end on-hand snapshot came back identical to today\'s, so Odoo may be ignoring the as-of-date stock lookup on this version. Treat these turns as unreliable until that\'s confirmed.');
+  if(t.quantityBasis === 'product_uom_qty') warnings.push('This Odoo version only exposed the demanded quantity on delivery lines, so shipped units use demand rather than quantity actually delivered.');
+  if(warnings.length){
+    warnEl.style.display = 'block';
+    warnEl.textContent = warnings.join(' ');
+  }
+
+  const fmtTurns = v => v == null ? '-' : v.toFixed(2) + 'x';
+  const fmtDays = v => v == null ? '-' : Math.round(v).toLocaleString() + ' days';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  // Days of cover (per device, in the table) = today's on-hand / average daily shipments
+  // over the last 12 months.
+  const DAYS_IN_PERIOD = 365;
+  kpiEl.innerHTML = `
+    <div class="kpi"><p>Warehouse turns</p><p>${fmtTurns(t.total.turns)}</p></div>
+    <div class="kpi"><p>Units shipped (12 mo)</p><p>${t.total.shipped.toLocaleString()}</p></div>
+    <div class="kpi"><p>Average on-hand</p><p>${Math.round(t.total.avgOnHand).toLocaleString()}</p></div>
+  `;
+
+  // PAR: the stock position (on hand + buildable) to keep. Uses Odoo's reordering-rule max
+  // when one exists for the device in this warehouse; otherwise an estimate from the last
+  // 12 months' shipments:
+  //   average monthly shipments x lead time x (1 + safety stock)
+  // Orders can be placed any time, so only the lead time needs covering (no time between
+  // orders). Lead time and safety stock are the two controls in this card.
+  // Estimates are rounded to the nearest 100 (minimum 100 for any device that ships).
+  const leadDefault = parseFloat(document.getElementById('leadTime').value) || 91;   // days, for devices with no vendor lead time
+  const vendorPolicy = (document.getElementById('vendorPolicy') || {}).value || 'default';
+  const safetyPct = (parseFloat(document.getElementById('safetyStock').value) || 0) / 100;   // the default, for devices you haven't adjusted
+  const estimatePar = (shipped, days, safety) => {
+    if(!(shipped > 0)) return 0;
+    const raw = (shipped / 365) * days * (1 + safety);
+    return Math.max(100, Math.round(raw / 100) * 100);
+  };
+
+  const rows = Object.keys(t.byDevice).map(sku => {
+    const d = { sku, ...t.byDevice[sku] };
+    const leadBom = DATA.inventory[sku] ? DATA.inventory[sku].manufacturable : null;
+    d.lead = deviceLeadTime(sku, leadBom ? (leadBom.components || []) : [], vendorPolicy);
+    // What Odoo / the defaults say, and what the user's own sliders say instead (if they moved them).
+    const ov = parOverrides[sku] || {};
+    d.leadAuto = d.lead.source === 'default' ? leadDefault : d.lead.days;
+    d.leadAdjusted = Number.isFinite(ov.lead);
+    d.leadDays = d.leadAdjusted ? ov.lead : d.leadAuto;
+    d.safetyAuto = safetyPct;
+    d.safetyAdjusted = Number.isFinite(ov.safety);
+    d.safety = d.safetyAdjusted ? ov.safety / 100 : safetyPct;
+    const est = estimatePar(d.shipped, d.leadDays, d.safety);
+    d.par = d.odooPar > 0 ? d.odooPar : est;
+    d.parSource = d.odooPar > 0 ? 'Odoo' : (est > 0 ? 'est.' : null);
+    d.onHandNow = DATA.inventory[sku] ? DATA.inventory[sku].onHand : 0;
+    d.cover = d.shipped > 0 ? d.onHandNow / (d.shipped / DAYS_IN_PERIOD) : null;
+    // Buildable = units makeable from the components on hand, from the device's bill of
+    // materials in bom_config.py. Devices without a BOM have none (null) and count as 0.
+    const bom = DATA.inventory[sku] ? DATA.inventory[sku].manufacturable : null;
+    d.hasBom = !!bom;
+    d.buildable = bom ? bom.manufacturableQty : 0;
+    // The limiting component is the one whose exhaustion stopped this device's RESERVED builds
+    // (allocationLimit); older data without it falls back to the stand-alone bottleneck.
+    const limitCode = bom ? (bom.allocationLimit || bom.bottleneckComponent) : null;
+    d.buildLimit = bom ? (bom.components || []).find(c => c.component === limitCode) : null;
+    d.standalone = bom && typeof bom.standaloneQty === 'number' ? bom.standaloneQty : null;
+    d.allocBasis = bom ? bom.allocationBasis : null;
+    // Extra units buildable once parts that are on order arrive (open receipts for components,
+    // read through the bill of materials). Older data without it counts as 0.
+    d.incomingBuildable = bom && typeof bom.incomingBuildableQty === 'number' ? bom.incomingBuildableQty : 0;
+    d.incomingLimit = bom ? (bom.components || []).find(c => c.component === bom.incomingLimit) : null;
+    d.bomComponents = bom ? (bom.components || []) : [];
+    d.incomingSent = !!bom && typeof bom.incomingBuildableQty === 'number';  // false = connector too old to send it
+    // Position = what you'd really have: on hand, less units already promised to customers
+    // (confirmed outgoing: Waiting/Ready deliveries with Ops Status "in_process"), plus buildable.
+    d.confirmed = DATA.inventory[sku] ? (DATA.inventory[sku].outgoingConfirmed || 0) : 0;
+    d.position = d.onHandNow - d.confirmed + d.buildable + d.incomingBuildable;
+    d.overPar = d.par > 0 && d.position > d.par;
+    d.orderNow = d.par > 0 ? Math.max(0, Math.round((d.par - d.position) / 100) * 100) : 0;
+    return d;
+  });
+
+  renderTurnsExample(rows);
+  renderParExample(rows, leadDefault);
+
+  // ---- Turns table (sorted by most days of cover first) ----
+  const rank = d => {
+    if(d.shipped === 0) return d.onHandNow > 0 ? Infinity : -2;
+    return d.cover;
+  };
+  const status = d => {
+    if(d.shipped === 0 && d.avgOnHand === 0 && d.onHandNow === 0) return '<span style="color:var(--text-muted);">no activity</span>';
+    if(d.shipped === 0) return '<span style="color:var(--warning-text);">no shipments</span>';
+    if(d.onHandNow === 0) return '<span style="color:var(--danger-text);">out of stock</span>';
+    if(d.avgOnHand === 0) return '<span style="color:var(--text-muted);">no avg stock</span>';
+    return '';
+  };
+  const turnsRows = rows.slice().sort((a,b) => rank(b) - rank(a) || a.sku.localeCompare(b.sku));
+  tableEl.innerHTML = `
+    <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+      <th style="font-weight:400;padding:6px 8px 6px 0;">Device</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">Units shipped</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">Avg on-hand</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Stock in the warehouse today - the figure Days of cover is based on">On hand now</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">Turns</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Today's on-hand / average daily shipments over the last 12 months">Days of cover</th>
+      <th style="font-weight:400;padding:6px 0 6px 8px;"></th>
+    </tr></thead>
+    <tbody>
+      ${turnsRows.map(d => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 8px 6px 0;">${d.name} <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:13px;">(${d.sku})</span></td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.shipped.toLocaleString()}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${Math.round(d.avgOnHand).toLocaleString()}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.onHandNow.toLocaleString()}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${fmtTurns(d.turns)}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);${d.shipped > 0 && d.onHandNow === 0 ? 'color:var(--danger-text);' : ''}">${d.cover == null ? '-' : fmtDays(d.cover)}</td>
+          <td style="padding:6px 0 6px 8px;font-size:15px;">${status(d)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+
+  // ---- PAR / ordering position card ----
+  const withPar = rows.filter(d => d.par > 0);
+  const overParCount = withPar.filter(d => d.overPar).length;
+  const totalPar = withPar.reduce((s, d) => s + d.par, 0);
+  const totalBuildable = rows.reduce((s, d) => s + d.buildable, 0);
+  const totalIncomingBuildable = rows.reduce((s, d) => s + d.incomingBuildable, 0);
+  const bomCount = rows.filter(d => d.hasBom).length;
+  const toOrder = rows.filter(d => d.orderNow > 0);
+  const totalOrderNow = toOrder.reduce((s, d) => s + d.orderNow, 0);
+  const odooCount = rows.filter(d => d.parSource === 'Odoo').length;
+
+  // Shared components are reserved between devices by the connector (weighted by units shipped),
+  // so there's nothing to warn about any more - unless it had no shipment data to weight by.
+  const equalSplit = rows.some(d => d.hasBom && d.allocBasis === 'equal');
+
+  parKpiEl.innerHTML = `
+    <div class="kpi"><p>Total PAR (all devices)</p><p>${totalPar.toLocaleString()}</p></div>
+    <div class="kpi"><p>Buildable (all devices)</p><p>${totalBuildable.toLocaleString()}</p></div>
+    <div class="kpi"><p>Buildable from incoming parts</p><p>${totalIncomingBuildable.toLocaleString()}</p></div>
+    <div class="kpi"><p>Devices over PAR</p><p style="${overParCount > 0 ? 'color:var(--warning-text);' : ''}">${overParCount} / ${withPar.length}</p></div>
+    <div class="kpi"><p>Units to order now (${toOrder.length} device${toOrder.length === 1 ? '' : 's'})</p><p>${totalOrderNow.toLocaleString()}</p></div>
+  `;
+
+  const vendorCount = rows.filter(d => d.lead.source !== 'default').length;
+  parNoteEl.textContent =
+    `${vendorCount} of ${rows.length} devices use a vendor lead time from Odoo; the rest use the default of ${leadDefault} days. ` +
+    `${odooCount} use a PAR set in Odoo. ${bomCount} have a parts list, so Buildable applies to them.` +
+    (t.reorderRulesError ? " Odoo's PAR settings could not be read, so every PAR is an estimate." : '');
+
+  const adjustedDevices = rows.filter(d => d.leadAdjusted || d.safetyAdjusted);
+  const adjEl = document.getElementById('parAdjusted');
+  if(adjustedDevices.length){
+    const names = adjustedDevices.slice(0, 4).map(d => esc(d.name)).join(', ') + (adjustedDevices.length > 4 ? ` and ${adjustedDevices.length - 4} more` : '');
+    adjEl.style.display = '';
+    adjEl.innerHTML = `<b>${adjustedDevices.length} device${adjustedDevices.length === 1 ? '' : 's'} adjusted by you</b> (${names}). These changes are saved in this browser only. <button class="link-btn" id="parResetAll">Reset all</button>`;
+    document.getElementById('parResetAll').onclick = () => { clearAllParOverrides(); renderWarehouseTurns(); };
+  } else {
+    adjEl.style.display = 'none'; adjEl.innerHTML = '';
+  }
+
+  const parWarnings = [];
+  if(equalSplit) parWarnings.push('Shipment data was unavailable on this refresh, so shared parts are being split equally between devices rather than by popularity.');
+  const V = DATA.vendors;
+  if(V === undefined) parWarnings.push('Vendor lead times are not available yet. Replace odoo_client.py with the latest version and restart; until then every device uses the default lead time.');
+  else if(V && V.error) parWarnings.push(`Vendor lead times could not be read from Odoo, so every device uses the default lead time. The Odoo user needs read access to vendor pricelists. (${V.error.split('\n')[0].slice(0, 160)})`);
+  const oneDay = rows.filter(d => d.par > 0 && d.lead.days === 1).length;
+  if(oneDay) parWarnings.push(`${oneDay} device${oneDay === 1 ? '' : 's'} show a 1-day lead time. That is Odoo's default for a new vendor line, so check it is real.`);
+  const partial = rows.filter(d => d.par > 0 && d.lead.source === 'parts' && d.lead.partsKnown < d.lead.partsTotal).length;
+  if(partial) parWarnings.push(`${partial} device${partial === 1 ? ' has' : 's have'} parts with no vendor lead time in Odoo, so ${partial === 1 ? 'its' : 'their'} lead time may be shorter than it really is.`);
+  if(parWarnings.length){
+    parWarnEl.style.display = 'block';
+    parWarnEl.textContent = parWarnings.join(' ');
+  }
+
+  const buildableCell = d => {
+    if(!d.hasBom) return '<span style="color:var(--text-muted);" title="No parts list for this device (for example, one we buy finished)">-</span>';
+    const c = d.buildLimit;
+    let tip;
+    if(!c) tip = 'No components listed for this device';
+    else if(c.missing) tip = `${c.component} wasn't found in Odoo, so nothing can be built until that product code matches`;
+    else if((c.usedBy || 1) > 1) tip = `Reserved share. Limited by ${c.component}, which ${c.usedBy - 1} other device${c.usedBy - 1 === 1 ? ' also uses' : 's also use'}: ${(c.reserved || 0).toLocaleString()} of its ${c.onHand.toLocaleString()} on hand is reserved for this device (${c.qtyPerUnit} needed per unit).`;
+    else tip = `Limited by ${c.component}: ${c.onHand.toLocaleString()} on hand, ${c.qtyPerUnit} needed per unit (not shared with any other device).`;
+    if(d.standalone != null && d.standalone > d.buildable) tip += ` On its own, with every part to itself, it could build ${d.standalone.toLocaleString()}.`;
+    return `<span title="${esc(tip)}" style="cursor:help;border-bottom:1px dotted var(--text-muted);">${d.buildable.toLocaleString()}</span>`;
+  };
+
+  // A number when incoming parts add builds; otherwise a short grey reason instead of a bare dash,
+  // with the detail on hover. Many devices legitimately get nothing: the part holding them back
+  // is shared and has nothing on order, so other parts arriving can't help.
+  const incomingCell = d => {
+    const why = (label, tip) => `<span title="${esc(tip)}" style="color:var(--text-muted);font-size:13px;cursor:help;">${label}</span>`;
+    if(!d.hasBom) return why('no parts list', 'No parts list for this device (for example, one we buy finished), so there are no parts to count.');
+    if(!d.incomingSent) return why('-', "The connector didn't send incoming-parts data. Put the latest odoo_client.py in place and restart server.py.");
+    if(d.incomingBuildable > 0){
+      const c = d.incomingLimit;
+      let tip = 'Extra units once the parts on order arrive.';
+      if(c && !c.missing) tip += ` Limited by ${c.component}: ${c.onHand.toLocaleString()} on hand, ${(c.incoming || 0).toLocaleString()} incoming, ${c.qtyPerUnit} needed per unit` + ((c.usedBy || 1) > 1 ? `, shared with ${c.usedBy - 1} other device${c.usedBy - 1 === 1 ? '' : 's'}.` : '.');
+      return `<span title="${esc(tip)}" style="cursor:help;border-bottom:1px dotted var(--text-muted);">+${d.incomingBuildable.toLocaleString()}</span>`;
+    }
+    const c = d.incomingLimit;
+    const anyIncoming = d.bomComponents.some(x => !x.missing && (x.incoming || 0) > 0);
+    if(c && c.missing) return why('part not in Odoo', `${c.component} wasn't found in Odoo, so nothing can be built until that product code matches.`);
+    if(!anyIncoming) return why('none on order', "None of this device's parts has anything on order, so nothing extra can be built. (This is the same Incoming figure shown per part in the Demand Outlook breakdown.)");
+    if(c && !((c.incoming || 0) > 0)) return why(`needs ${c.component}`, `${c.component} is what stops more builds: none is left after the builds already reserved from on-hand stock (${c.onHand.toLocaleString()} on hand), and nothing is on order. Other parts arriving can't help until it's restocked.`);
+    if(c) return why('others first', `${c.component} is on order (${(c.incoming || 0).toLocaleString()}), but it's shared with ${Math.max(0, (c.usedBy || 1) - 1)} other device${(c.usedBy || 1) - 1 === 1 ? '' : 's'} and the more popular ones are given it first, so none is left over for this device.`);
+    return why('-', 'No extra builds from the parts on order.');
+  };
+
+  // Part-by-part breakdown of one device: for every component, where its stock goes - reserved
+  // for this device, for every other device, or left over - first from the parts on hand, then from
+  // the parts on order. All figures are in units of the part itself.
+  const PAR_COLS = 12;
+  // The vendor (or the slowest part and its vendor) behind a device's lead time, shown under its slider.
+  const leadSub = d => {
+    const L = d.lead;
+    if(L.source === 'default'){
+      const why = DATA.vendors && DATA.vendors.error ? "Vendor lead times couldn't be read from Odoo" : 'Odoo has no vendor lead time for this device';
+      return `<span class="lead-sub" title="${esc(why)}, so the default of ${leadDefault} days is used.">default</span>`;
+    }
+    const listed = list => (list || []).map(v => `${v.vendor}${v.leadDays ? ' (' + v.leadDays + ' days)' : ''}`).join(', ');
+    if(L.source === 'device'){
+      return `<span class="lead-sub" title="${esc('Vendors listed in Odoo: ' + listed((DATA.vendors.byDevice || {})[d.sku]) + '.')}">${esc(L.vendor)}</span>`;
+    }
+    const partial = L.partsKnown < L.partsTotal ? `<span class="lead-sub warn" title="${esc('Only ' + L.partsKnown + ' of ' + L.partsTotal + ' parts have a vendor lead time in Odoo, so the real lead time may be longer.')}">only ${L.partsKnown} of ${L.partsTotal} parts known</span>` : '';
+    return `<span class="lead-sub" title="${esc('The slowest part sets the lead time: ' + L.part + ' from ' + L.vendor + '. Click the Incoming parts cell for every part\'s vendor.')}">${esc(L.part)} &middot; ${esc(L.vendor)}</span>${partial}`;
+  };
+  const leadScaleMax = Math.max(180, ...rows.map(r => Math.ceil(Math.max(r.leadDays, r.leadAuto))));   // common scale for every lead time slider
+  // One slider (lead time in days, or safety stock in %) for one device. Dragging only updates the label;
+  // the table redraws when the slider is released, so the drag isn't interrupted.
+  const sliderCell = (d, kind) => {
+    const isLead = kind === 'lead';
+    const adjusted = isLead ? d.leadAdjusted : d.safetyAdjusted;
+    const value = isLead ? d.leadDays : Math.round(d.safety * 100);
+    const auto = isLead ? d.leadAuto : Math.round(d.safetyAuto * 100);
+    const max = isLead ? leadScaleMax : Math.max(100, value, auto);
+    const unit = isLead ? ' days' : '%';
+    const off = d.parSource !== 'est.';
+    const tip = d.parSource === 'Odoo' ? "This PAR comes from an Odoo reordering rule, so the sliders aren't used for it."
+      : off ? 'No shipments yet, so there is no PAR to adjust.'
+      : (isLead ? 'Drag to try a different lead time for this device only.' : 'Drag to try a different safety stock for this device only.');
+    return `<div class="par-row"><input type="range" class="par-slider${adjusted ? ' adj' : ''}" data-sku="${esc(d.sku)}" data-kind="${kind}" data-auto="${auto}" min="0" max="${max}" step="${isLead ? 1 : 5}" value="${value}" ${off ? 'disabled' : ''} title="${esc(tip)}" aria-label="${isLead ? 'Lead time' : 'Safety stock'} for ${esc(d.name)}"><span class="par-val${adjusted ? ' adj' : ''}">${value}${unit}</span>${adjusted ? `<button class="reset-btn" data-sku="${esc(d.sku)}" data-kind="${kind}" title="Back to ${auto}${unit}">&#8634;</button>` : ''}</div>`;
+  };
+  const parDetailHtml = d => {
+    const bom = DATA.inventory[d.sku] ? DATA.inventory[d.sku].manufacturable : null;
+    const num = v => (v == null ? '-' : Number(v).toLocaleString());
+    const cellStyle = 'padding:4px 8px;text-align:right;font-family:var(--font-mono);';
+    const badge = (text, cls) => ` <span style="font-size:13px;padding:1px 5px;border-radius:8px;background:var(--warning-bg);color:var(--warning-text);font-family:var(--font);">${text}</span>`;
+    const V = DATA.vendors;
+    const vendorsOn = !!(V && !V.error);
+    const body = d.bomComponents.map(c => {
+      if(c.missing) return `<tr><td style="padding:4px 8px 4px 0;">${esc(c.component)}</td><td colspan="${vendorsOn ? 11 : 9}" style="padding:4px 8px;color:var(--warning-text);">Not found in Odoo, so nothing can be reserved or built until this product code matches.</td></tr>`;
+      let tags = '';
+      if(bom && c.component === bom.allocationLimit) tags += badge('stops builds from parts on hand');
+      if(bom && c.component === bom.incomingLimit && d.incomingSent) tags += badge('stops extra builds');
+      const pv = vendorsOn ? pickVendor((V.byComponent || {})[c.component], vendorPolicy) : null;
+      const sets = d.lead.source === 'parts' && d.lead.part === c.component;
+      const vendorCells = vendorsOn ? `
+        <td style="padding:4px 8px;text-align:left;font-family:var(--font);">${pv ? esc(pv.vendor) : '<span style="color:var(--text-muted);">none in Odoo</span>'}</td>
+        <td style="${cellStyle}${sets ? 'font-weight:600;' : ''}white-space:nowrap;">${pv ? pv.leadDays + ' days' : '-'}${sets ? ' <span class="slow-badge">sets the lead time</span>' : ''}</td>` : '';
+      return `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:4px 8px 4px 0;">${esc(c.component)}${tags}${(c.usedBy || 1) > 1 ? ` <span style="font-size:13px;color:var(--text-muted);">shared by ${c.usedBy}</span>` : ''}</td>
+        <td style="${cellStyle}">${num(c.qtyPerUnit)}</td>
+        <td style="${cellStyle}">${num(c.onHand)}</td>
+        <td style="${cellStyle}font-weight:600;">${num(c.reserved)}</td>
+        <td style="${cellStyle}">${num(c.reservedOthers)}</td>
+        <td style="${cellStyle}">${num(c.leftAfterReserve)}</td>
+        <td style="${cellStyle}">${num(c.incoming)}</td>
+        <td style="${cellStyle}font-weight:600;">${num(c.incomingReserved)}</td>
+        <td style="${cellStyle}">${num(c.incomingReservedOthers)}</td>
+        <td style="${cellStyle}">${num(c.leftAfterIncoming)}</td>${vendorCells}
+      </tr>`;
+    }).join('');
+    const th = (t, extra) => `<th style="font-weight:400;padding:4px 8px;text-align:right;${extra || ''}">${t}</th>`;
+    return `
+      <tr id="parDetail-${d.sku}" style="display:${parExpanded.has(d.sku) ? 'table-row' : 'none'};">
+        <td colspan="${PAR_COLS}" style="padding:4px 0 14px 12px;">
+          <div style="background:rgba(128,128,128,0.06);border-radius:var(--radius);padding:10px 12px;">
+            <p style="font-size:15px;margin:0 0 8px;">
+              <strong>${esc(d.name)}</strong>: ${d.buildable.toLocaleString()} units reserved from parts on hand
+              ${d.incomingSent ? `+ <strong>${d.incomingBuildable.toLocaleString()}</strong> more once parts on order arrive` : ''}
+              ${d.standalone != null && d.standalone > d.buildable ? `<span style="color:var(--text-muted);">(${d.standalone.toLocaleString()} if it had every part to itself)</span>` : ''}.
+              Shipped ${Number(d.shipped || 0).toLocaleString()} units in the last 12 months, which sets its share of any part it competes for.
+              ${d.lead.source === 'parts' ? `Its lead time is set by <strong>${esc(d.lead.part)}</strong> (${esc(d.lead.vendor)}, ${d.lead.days} days).` : ''}${d.leadAdjusted ? ` You set it to ${d.leadDays} days.` : ''}
+            </p>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:15px;min-width:${vendorsOn ? 1100 : 820}px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);">
+                    <th rowspan="2" style="font-weight:400;padding:4px 8px 4px 0;text-align:left;vertical-align:bottom;">Part</th>
+                    ${th('Per unit', 'vertical-align:bottom;')}
+                    <th colspan="4" style="font-weight:500;padding:4px 8px;text-align:center;border-bottom:1px solid var(--border);">From parts on hand</th>
+                    <th colspan="4" style="font-weight:500;padding:4px 8px;text-align:center;border-bottom:1px solid var(--border);">From parts on order</th>
+                    ${vendorsOn ? '<th rowspan="2" style="font-weight:400;padding:4px 8px;text-align:left;vertical-align:bottom;">Vendor</th><th rowspan="2" style="font-weight:400;padding:4px 8px;text-align:right;vertical-align:bottom;">Lead time</th>' : ''}
+                  </tr>
+                  <tr style="color:var(--text-secondary);">
+                    ${th('')}
+                    ${th('On hand')}${th('Reserved: this device')}${th('Reserved: other devices')}${th('Left')}
+                    ${th('On order')}${th('Reserved: this device')}${th('Reserved: other devices')}${th('Left')}
+                  </tr>
+                </thead>
+                <tbody>${body}</tbody>
+              </table>
+            </div>
+            <p style="font-size:13px;color:var(--text-muted);margin:8px 0 0;">
+              Reserved = parts per unit &times; units built. "Other devices" is the same part reserved for every other device's builds. Left is what remains after those
+              reservations. Parts on order are only reserved after parts on hand, and never reduce what's already reserved from stock.
+            </p>
+          </div>
+        </td>
+      </tr>`;
+  };
+
+  const parRows = rows.slice().sort((a,b) => b.orderNow - a.orderNow || (b.par > 0) - (a.par > 0) || a.sku.localeCompare(b.sku));
+  parTableEl.innerHTML = `
+    <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+      <th style="font-weight:400;padding:6px 8px 6px 0;">Device</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">On hand now</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Units on delivery orders that are Waiting/Ready with Ops Status Shipment in Progress - already promised to customers">Outgoing confirmed</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Units you could build right now from the components on hand. Hover a number to see the limiting component.">Buildable</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Extra units you could build once the parts that are on order arrive, on top of Buildable. Hover a number for the limiting part; click it for a part-by-part breakdown of what is reserved.">Incoming parts</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="On hand now - outgoing confirmed + buildable + buildable from incoming parts">Position</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="How long a new order takes to arrive. Starts at the vendor's Delivery Lead Time in Odoo (for a device we build, its slowest part). Drag to change it for this device.">Lead time</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Extra buffer on top of expected demand. Starts at the default above. Drag to change it for this device.">Safety stock</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;">PAR</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="Position as a percentage of PAR">Position vs PAR</th>
+      <th style="font-weight:400;padding:6px 8px;text-align:right;" title="PAR minus position, rounded to the nearest 100">Order now</th>
+      <th style="font-weight:400;padding:6px 0 6px 8px;"></th>
+    </tr></thead>
+    <tbody>
+      ${parRows.map(d => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 8px 6px 0;">${d.name} <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:13px;white-space:nowrap;">(${d.sku})</span></td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.onHandNow.toLocaleString()}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.confirmed > 0 ? d.confirmed.toLocaleString() : '-'}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${buildableCell(d)}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);${d.hasBom ? 'cursor:pointer;' : ''}" ${d.hasBom ? `onclick="toggleParDetail('${d.sku}')"` : ''}>${incomingCell(d)}${d.hasBom ? ` <span id="parChev-${d.sku}" title="Click for a part-by-part breakdown of what is reserved" style="display:inline-block;font-size:13px;color:var(--text-muted);margin-left:2px;transition:transform .15s;transform:${parExpanded.has(d.sku) ? 'rotate(180deg)' : 'none'};">&#9662;</span>` : ''}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.position.toLocaleString()}</td>
+          <td class="par-ctl" style="text-align:right;">${sliderCell(d, 'lead')}${leadSub(d)}</td>
+          <td class="par-ctl" style="text-align:right;">${sliderCell(d, 'safety')}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);">${d.par > 0 ? d.par.toLocaleString() + ' <span style="font-size:13px;color:var(--text-muted);font-family:var(--font);">' + d.parSource + '</span>' : '-'}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);${d.overPar ? 'color:var(--warning-text);' : ''}">${d.par > 0 ? Math.round(d.position / d.par * 100) + '%' : '-'}</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);font-weight:${d.orderNow > 0 ? '600' : '400'};">${d.par > 0 ? (d.orderNow > 0 ? d.orderNow.toLocaleString() : '-') : '-'}</td>
+          <td style="padding:6px 0 6px 8px;font-size:15px;">${d.overPar ? '<span style="color:var(--warning-text);">over PAR</span>' : ''}</td>
+        </tr>
+        ${d.hasBom ? parDetailHtml(d) : ''}
+      `).join('')}
+    </tbody>
+  `;
+  renderVendorSummary(rows);
+}
+
+function renderMetrics(){
+  if(!DATA || activeTab !== 'metrics') return;
+  const skus = Object.keys(DATA.inventory);
+  const totalOnHand = skus.reduce((s,sku) => s + DATA.inventory[sku].onHand, 0);
+  const totalConfirmed = skus.reduce((s,sku) => s + DATA.inventory[sku].outgoingConfirmed, 0);
+  const totalUnconfirmed = skus.reduce((s,sku) => s + DATA.inventory[sku].outgoingUnconfirmed, 0);
+  const cycle = DATA.delivery_cycle_times || {};
+  const windowData = (cycle.windows && cycle.windows[metricsWindow]) || { all: {}, deviceOnly: {} };
+
+  document.getElementById('metricsKpiRow').innerHTML = `
+    <div class="kpi"><p>Total on hand (all devices)</p><p>${totalOnHand.toLocaleString()}</p></div>
+    <div class="kpi"><p>Total outgoing confirmed</p><p>${totalConfirmed.toLocaleString()}</p></div>
+    <div class="kpi"><p>Total outgoing unconfirmed</p><p>${totalUnconfirmed.toLocaleString()}</p></div>
+  `;
+
+  renderWarehouseTurns();
+
+  function statBlock(label, stat){
+    if(!stat || stat.avgDays == null){
+      return `<div class="cycle-stat"><p>${label}</p><p class="big" style="color:var(--text-muted);font-size:18px;">No data</p></div>`;
+    }
+    return `<div class="cycle-stat">
+      <p>${label}</p>
+      <p class="big">${stat.avgDays} days</p>
+      <p class="sub">median ${stat.medianDays}d &middot; ${stat.sampleSize.toLocaleString()} deliveries</p>
+    </div>`;
+  }
+
+  document.getElementById('cycleTimeCompare').innerHTML =
+    statBlock(`All deliveries (${WINDOW_LABELS[metricsWindow]})`, windowData.all) +
+    statBlock(`Device-only deliveries (${WINDOW_LABELS[metricsWindow]})`, windowData.deviceOnly);
+
+  const outlierInfo = cycle.outlierFilter || {};
+  document.getElementById('outlierNotice').textContent = outlierInfo.applied
+    ? `${outlierInfo.excludedCount} unusually long deliver${outlierInfo.excludedCount === 1 ? 'y' : 'ies'} (over ${outlierInfo.thresholdDays} days) left out of the averages. The same cutoff applies to every time period.`
+    : '';
+
+  const recon = cycle.reconciliation || {};
+  const rawCount = recon.rawCompletedByWindow ? recon.rawCompletedByWindow[metricsWindow] : null;
+  if (rawCount != null) {
+    const reasonParts = [];
+    if (recon.missingAssignedDateCount) reasonParts.push(`${recon.missingAssignedDateCount} with no Waiting date (all time)`);
+    if (recon.negativeDurationCount) reasonParts.push(`${recon.negativeDurationCount} with a Waiting date after they were completed (all time)`);
+    if (recon.noDoneDateCount) reasonParts.push(`${recon.noDoneDateCount} with no completion date (all time)`);
+    document.getElementById('reconciliationNotice').innerHTML =
+      `Completed deliveries to customers in this period, before unusually long ones are removed: <strong>${rawCount.toLocaleString()}</strong>.` +
+      (reasonParts.length ? ` Not counted at all: ${reasonParts.join('; ')}.` : '') +
+      ` Doesn't match your own count? Check that it uses Effective Date, status Done, and deliveries from WH to customers.`;
+  } else {
+    document.getElementById('reconciliationNotice').textContent = '';
+  }
+
+  const byDevice = windowData.byDevice || {};
+
+  function renderDeviceTable(elementId, byDeviceData){
+    const rows = Object.keys(byDeviceData)
+      .map(sku => ({ sku, ...byDeviceData[sku] }))
+      .sort((a,b) => b.sampleSize - a.sampleSize);
+    document.getElementById(elementId).innerHTML = `
+      <thead><tr style="color:var(--text-secondary);text-align:left;border-bottom:1px solid var(--border);">
+        <th style="font-weight:400;padding:6px 8px 6px 0;">Device</th>
+        <th style="font-weight:400;padding:6px 8px;text-align:right;">Avg days</th>
+        <th style="font-weight:400;padding:6px 8px;text-align:right;">Median days</th>
+        <th style="font-weight:400;padding:6px 0 6px 8px;text-align:right;">Deliveries</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:6px 8px 6px 0;font-family:var(--font-mono);">${r.sku}</td>
+            <td style="padding:6px 8px;text-align:right;">${r.avgDays != null ? r.avgDays : '<span style="color:var(--text-muted);">No data</span>'}</td>
+            <td style="padding:6px 8px;text-align:right;">${r.medianDays != null ? r.medianDays : '-'}</td>
+            <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--font-mono);">${r.sampleSize}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+  }
+
+  renderDeviceTable('byDeviceTable', byDevice);
+
+  // Sales order age at fulfillment (bucketed counts, not averages)
+  const fulfillment = DATA.order_to_fulfillment_times || {};
+  const bucketData = (fulfillment.windows && fulfillment.windows[metricsWindow]) || { under90:0, '90to180':0, '180to360':0, over360:0, total:0, units: { under90:0, '90to180':0, '180to360':0, over360:0, total:0 } };
+  // Cards and chart follow the Devices/Orders toggle. Top-level bucket keys count delivery
+  // orders; the nested "units" dict counts tracked device units on those orders.
+  const countByUnits = orderAgeMode === 'units';
+  const shownBuckets = countByUnits ? (bucketData.units || { under90:0, '90to180':0, '180to360':0, over360:0, total:0 }) : bucketData;
+  const unitNoun = countByUnits ? 'devices' : 'orders';
+
+  const bucketDefs = [
+    { key: 'under90', label: '0\u201390 days', color: '#2fae66' },
+    { key: '90to180', label: '90\u2013180 days', color: '#e2a63b' },
+    { key: '180to360', label: '180\u2013360 days', color: '#e07b39' },
+    { key: 'over360', label: '360+ days', color: '#c0342a', warn: true },
+  ];
+  // An older connector still sends the previous 30/60/90-day groups; say so instead of showing zeros.
+  const oldAgeGroups = bucketData.under30 !== undefined && bucketData.under90 === undefined;
+  document.getElementById('orderAgeBuckets').innerHTML = oldAgeGroups
+    ? '<p class="section-lead" style="grid-column:1/-1;">The order-age groups have changed to 0\u201390, 90\u2013180, 180\u2013360 and 360+ days. Replace odoo_client.py with the latest version and restart to see them.</p>'
+    : bucketDefs.map(b => {
+    const count = shownBuckets[b.key] || 0;
+    const pct = shownBuckets.total > 0 ? Math.round((count / shownBuckets.total) * 100) : 0;
+    return `<div class="age-bucket ${b.warn && count > 0 ? 'warn' : ''}">
+      <p>${b.label}</p>
+      <p class="count">${count.toLocaleString()}</p>
+      <p class="pct">${pct}% of ${shownBuckets.total.toLocaleString()} ${unitNoun}</p>
+    </div>`;
+  }).join('');
+
+  const coverage = (fulfillment.coverage && fulfillment.coverage[metricsWindow]) || { totalLinkedToSalesOrder: 0, unlinkedCount: 0 };
+  const totalLinked = coverage.totalLinkedToSalesOrder;
+  const unlinked = coverage.unlinkedCount;
+  const totalDeliveries = totalLinked + unlinked;
+  const coveragePct = totalDeliveries > 0 ? Math.round((totalLinked / totalDeliveries) * 100) : 0;
+  document.getElementById('orderFulfillmentCoverage').textContent = totalDeliveries > 0
+    ? `${totalLinked.toLocaleString()} of ${totalDeliveries.toLocaleString()} deliveries (${coveragePct}%) in the last ${WINDOW_LABELS[metricsWindow]} had a sales order, so they are counted above.${fulfillment.skippedMissingOrderDate ? ` ${fulfillment.skippedMissingOrderDate} orders were left out because they have no order date.` : ''}`
+    : '';
+
+  // Sales order age at fulfillment, weekly stacked bar chart - current calendar year only.
+  // Filtering on the ISO week's own year (not just "trailing 12 months") means this
+  // resets at each new year rather than always showing a rolling year-long window.
+  const ctxOrderAge = document.getElementById('orderAgeWeeklyChart');
+  if(metricsCharts.orderAge) metricsCharts.orderAge.destroy();
+  const currentYear = new Date().getFullYear();
+  const weeks = oldAgeGroups ? [] : (fulfillment.byWeek || []).filter(w => w.year === currentYear);
+  // Per-week value for a bucket, following the Devices/Orders toggle
+  const weekVal = (w, key) => countByUnits ? ((w.units || {})[key] || 0) : (w[key] || 0);
+  document.getElementById('orderAgeChartTitle').textContent =
+    `Sales order age at fulfillment, by week (this year) - ${countByUnits ? 'number of devices' : 'number of orders'}`;
+  if(weeks.length){
+    metricsCharts.orderAge = new Chart(ctxOrderAge, {
+      type: 'bar',
+      data: {
+        labels: weeks.map(w => `W${w.week} '${String(w.year).slice(2)}`),
+        datasets: bucketDefs.map(b => ({ label: b.label, data: weeks.map(w => weekVal(w, b.key)), backgroundColor: b.color })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        // 'index' + intersect:false: hovering anywhere over a week's bar shows every
+        // bucket's value for that week together, not just the single segment under the cursor.
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { boxWidth: 12, font: {size:13} } },
+          tooltip: {
+            callbacks: {
+              footer: (items) => {
+                const total = items.reduce((s, item) => s + item.parsed.y, 0);
+                return `Total ${unitNoun}: ${total.toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: {size:13}, autoSkip: true, maxTicksLimit: 12 } },
+          y: { stacked: true, beginAtZero: true, title: { display: true, text: unitNoun }, ticks: { font: {size:13}, precision: 0 }, grid: { color: 'rgba(128,128,128,0.15)' } }
+        }
+      }
+    });
+  } else {
+    ctxOrderAge.getContext('2d').clearRect(0,0,ctxOrderAge.width, ctxOrderAge.height);
+  }
+
+  // Cycle time trend chart
+  const ctxCycle = document.getElementById('cycleTimeChart');
+  if(metricsCharts.cycle) metricsCharts.cycle.destroy();
+  if(cycle.byMonth && cycle.byMonth.length){
+    metricsCharts.cycle = new Chart(ctxCycle, {
+      type: 'line',
+      data: {
+        labels: cycle.byMonth.map(m => `${m.month}/${String(m.year).slice(2)}`),
+        datasets: [{ label: 'Avg days to complete', data: cycle.byMonth.map(m => m.avgDays),
+          borderColor: 'var(--accent)', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.15 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: {size:13} } },
+          y: { beginAtZero: true, title: { display: true, text: 'days' }, ticks: { font: {size:13} }, grid: { color: 'rgba(128,128,128,0.15)' } }
+        }
+      }
+    });
+  } else {
+    ctxCycle.getContext('2d').clearRect(0,0,ctxCycle.width, ctxCycle.height);
+  }
+
+  // Cycle time trend chart, weekly
+  const ctxCycleWeekly = document.getElementById('cycleTimeWeeklyChart');
+  if(metricsCharts.cycleWeekly) metricsCharts.cycleWeekly.destroy();
+  if(cycle.byWeek && cycle.byWeek.length){
+    metricsCharts.cycleWeekly = new Chart(ctxCycleWeekly, {
+      type: 'line',
+      data: {
+        labels: cycle.byWeek.map(w => `W${w.week} '${String(w.year).slice(2)}`),
+        datasets: [{ label: 'Avg days to complete', data: cycle.byWeek.map(w => w.avgDays),
+          borderColor: 'var(--accent)', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, tension: 0.15 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: {size:13}, autoSkip: true, maxTicksLimit: 12 } },
+          y: { beginAtZero: true, title: { display: true, text: 'days' }, ticks: { font: {size:13} }, grid: { color: 'rgba(128,128,128,0.15)' } }
+        }
+      }
+    });
+  } else {
+    ctxCycleWeekly.getContext('2d').clearRect(0,0,ctxCycleWeekly.width, ctxCycleWeekly.height);
+  }
+
+}
+
+// Lead time and safety stock live in the PAR card, the dashboard's one ordering calculation;
+// changing either recomputes PAR and the order quantities.
+document.getElementById('leadTime').addEventListener('input', function(){
+  if(DATA) renderWarehouseTurns();
+});
+// Per-device sliders (the table is rebuilt on every render, so listen on the table itself).
+document.getElementById('parTable').addEventListener('input', function(e){
+  const t = e.target;
+  if(!t.classList || !t.classList.contains('par-slider')) return;
+  const val = t.parentElement.querySelector('.par-val');
+  if(val) val.textContent = t.value + (t.dataset.kind === 'lead' ? ' days' : '%');   // live label only; the table redraws on release
+});
+document.getElementById('parTable').addEventListener('change', function(e){
+  const t = e.target;
+  if(!t.classList || !t.classList.contains('par-slider')) return;
+  const kind = t.dataset.kind === 'lead' ? 'lead' : 'safety';
+  const value = parseFloat(t.value);
+  if(value === parseFloat(t.dataset.auto)) clearParOverride(t.dataset.sku, kind);   // dragged back to the automatic value
+  else setParOverride(t.dataset.sku, kind, value);
+  const sku = t.dataset.sku;
+  if(DATA) renderWarehouseTurns();
+  const again = document.querySelector(`#parTable .par-slider[data-sku="${CSS.escape(sku)}"][data-kind="${t.dataset.kind}"]`);
+  if(again) again.focus();   // keep the keyboard working after the redraw
+});
+document.getElementById('parTable').addEventListener('click', function(e){
+  const b = e.target.closest ? e.target.closest('.reset-btn') : null;
+  if(!b) return;
+  clearParOverride(b.dataset.sku, b.dataset.kind === 'lead' ? 'lead' : 'safety');
+  if(DATA) renderWarehouseTurns();
+});
+document.getElementById('vendorPolicy').addEventListener('change', function(){
+  if(DATA) renderWarehouseTurns();
+});
+document.getElementById('safetyStock').addEventListener('input', function(){
+  document.getElementById('safetyStockOut').textContent = this.value + '%';
+  if(DATA) renderWarehouseTurns();
+});
+document.getElementById('horizon').addEventListener('input', function(){
+  document.getElementById('horizonOut').textContent = HORIZONS[parseInt(this.value,10)] + ' months';
+  render();
+});
+
+// Restore the remembered "don't count spares" choice.
+try { document.getElementById('excludeSparesCheckbox').checked = localStorage.getItem('revenueExcludeSpares') === '1'; } catch(e) {}
+
+// Printing (or saving as PDF) shows every "How is this calculated?" panel open, then restores them.
+window.addEventListener('beforeprint', () => document.querySelectorAll('details.how').forEach(d => { d.dataset.wasOpen = d.open ? '1' : ''; d.open = true; }));
+window.addEventListener('afterprint', () => document.querySelectorAll('details.how').forEach(d => { d.open = d.dataset.wasOpen === '1'; }));
+
+// ---------- Instant tooltips ----------
+// The browser's built-in title tooltips only show after holding still for about a second, and not
+// at all on touch screens or in some embedded browsers. So anything with a title attribute gets an
+// instant, styled tooltip instead; the title is moved to data-tip so the native one doesn't also
+// appear. Delegated on document, so it covers cells that are re-rendered later.
+(function(){
+  const tip = document.createElement('div');
+  tip.id = 'instantTip';
+  document.body.appendChild(tip);
+  let current = null;
+  function hide(){ current = null; tip.style.display = 'none'; }
+  function place(x, y){
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + pad, top = y + pad;
+    if(left + w > window.innerWidth - 8) left = Math.max(8, x - w - pad);
+    if(top + h > window.innerHeight - 8) top = Math.max(8, y - h - pad);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  document.addEventListener('mouseover', function(e){
+    const el = e.target.closest ? e.target.closest('[title],[data-tip]') : null;
+    if(!el) return;
+    if(el.hasAttribute('title')){
+      el.setAttribute('data-tip', el.getAttribute('title'));
+      el.removeAttribute('title');
+    }
+    const text = el.getAttribute('data-tip');
+    if(!text) return;
+    current = el;
+    tip.textContent = text;
+    tip.style.display = 'block';
+    place(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!current) return;
+    if(!document.body.contains(current)){ hide(); return; }  // the cell was re-rendered under the pointer
+    place(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseout', function(e){
+    if(!current) return;
+    if(e.relatedTarget && current.contains(e.relatedTarget)) return;
+    hide();
+  });
+  window.addEventListener('scroll', hide, true);
+})();
+
+initSession();
+load(false);
+</script>
 </body>
 </html>
